@@ -504,9 +504,13 @@ export default function Home() {
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 h-full">
-                  <LiveTranscript lines={transcriptLines} isProcessing={isActive} />
-                  <AgentActions actions={actions} summary={summary} isProcessing={isActive} />
+                <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 h-[calc(100vh-160px)]">
+                  <div className="xl:col-span-5 min-h-0">
+                    <LiveTranscript lines={transcriptLines} isProcessing={isActive} />
+                  </div>
+                  <div className="xl:col-span-7 min-h-0">
+                    <AgentActions actions={actions} summary={summary} isProcessing={isActive} />
+                  </div>
                 </div>
               )}
             </div>
