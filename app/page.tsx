@@ -87,14 +87,26 @@ export default function Home() {
     };
   }, [isProcessing, mode, allTranscriptLines, allActions]);
 
+  // Mock clinic schedule for appointment booking simulation
+  const getAppointmentResult = (department: string): string => {
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    // Simulate: next 2 days are "full", then find an open slot
+    const daysUntilOpen = dayOfWeek <= 3 ? 3 : 5; // Thu or Mon
+    const appointmentDate = new Date(today);
+    appointmentDate.setDate(today.getDate() + daysUntilOpen);
+    const dayName = appointmentDate.toLocaleDateString("en-US", { weekday: "long" });
+    const dateStr = appointmentDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const times = ["9:00 AM", "10:30 AM", "2:00 PM", "3:30 PM"];
+    const slot = times[Math.floor(Math.random() * times.length)];
+    return `${department} — ${dayName} ${dateStr} at ${slot} (confirmed)`;
+  };
+
   // Trigger autonomous agent actions after analysis completes
   const triggerAgentAutonomousActions = useCallback((analysisActions: ActionCard[], patientName: string, soapNote: { subjective: string; assessment: string }) => {
     setAgentActive(true);
     setAgentLog([]);
     setLiveRecordUpdates([]);
-
-    const entries: AgentLogEntry[] = [];
-    let idx = 0;
 
     const hasAlerts = analysisActions.some(a => a.type === "alert");
     const hasReferrals = analysisActions.some(a => a.type === "referral");
@@ -103,102 +115,137 @@ export default function Home() {
     const symptoms = analysisActions.filter(a => a.type === "symptom");
     const referrals = analysisActions.filter(a => a.type === "referral");
 
-    const addEntry = (entry: Omit<AgentLogEntry, "id">, delay: number) => {
-      setTimeout(() => {
-        const newEntry = { ...entry, id: `log-${idx++}` };
-        entries.push(newEntry);
-        setAgentLog([...entries]);
-      }, delay);
-    };
-
-    addEntry({
-      timestamp: Date.now(), action: "Updating Patient Record", icon: "📋",
-      detail: `Adding ${conditions.length} condition(s), ${medications.length} medication(s) to chart`,
-      status: "running", color: "text-cyan-400",
-    }, 300);
-
-    let updateDelay = 800;
-    if (conditions.length > 0) {
-      setTimeout(() => {
-        const condNames = conditions.map(c => (c.content as Record<string, string>).name).filter(Boolean);
-        setLiveRecordUpdates(prev => [...prev, `+ Condition: ${condNames.join(", ")}`]);
-      }, updateDelay);
-      updateDelay += 600;
+    // Build a deterministic timeline of agent steps
+    interface Step {
+      entry: Omit<AgentLogEntry, "id">;
+      startDelay: number;
+      doneDelay: number;
+      doneUpdate: Partial<AgentLogEntry>;
+      recordUpdate?: string;
+      recordUpdateDelay?: number;
     }
+
+    const steps: Step[] = [];
+    let t = 300; // running timeline cursor
+
+    // Step 1: Update patient record
+    steps.push({
+      entry: { timestamp: Date.now(), action: "Updating Patient Record", icon: "📋", detail: `Adding ${conditions.length} condition(s), ${medications.length} medication(s) to chart`, status: "running", color: "text-cyan-400" },
+      startDelay: t,
+      doneDelay: t + 1200,
+      doneUpdate: { status: "done" },
+    });
+    // Live record updates
+    if (conditions.length > 0) {
+      const condNames = conditions.map(c => (c.content as Record<string, string>).name).filter(Boolean);
+      steps[0].recordUpdate = `+ Condition: ${condNames.join(", ") || "Detected"}`;
+      steps[0].recordUpdateDelay = t + 400;
+    }
+    t += 1400;
+
     if (symptoms.length > 0) {
       setTimeout(() => {
         const symNames = symptoms.slice(0, 3).map(s => (s.content as Record<string, string>).description).filter(Boolean);
-        setLiveRecordUpdates(prev => [...prev, `+ Symptoms: ${symNames.join(", ")}`]);
-      }, updateDelay);
-      updateDelay += 600;
+        setLiveRecordUpdates(prev => [...prev, `+ Symptoms: ${symNames.join(", ") || "Reported"}`]);
+      }, t - 600);
     }
     if (medications.length > 0) {
       setTimeout(() => {
         const medNames = medications.map(m => (m.content as Record<string, string>).name).filter(Boolean);
-        setLiveRecordUpdates(prev => [...prev, `+ Medications discussed: ${medNames.join(", ")}`]);
-      }, updateDelay);
-      updateDelay += 600;
+        setLiveRecordUpdates(prev => [...prev, `+ Medications: ${medNames.join(", ") || "Discussed"}`]);
+      }, t - 200);
     }
 
-    setTimeout(() => {
-      entries[0] = { ...entries[0], status: "done" };
-      setAgentLog([...entries]);
-    }, updateDelay);
+    // Step 2: Send SOAP report email
+    steps.push({
+      entry: { timestamp: Date.now(), action: "Sending SOAP Report", icon: "📧", detail: `Emailing encounter report to primary care team`, status: "running", color: "text-blue-400" },
+      startDelay: t,
+      doneDelay: t + 1300,
+      doneUpdate: { status: "sent", detail: `SOAP note sent to primarycare@clinic.org for ${patientName}` },
+    });
+    t += 1600;
 
-    addEntry({
-      timestamp: Date.now(), action: "Sending SOAP Report", icon: "📧",
-      detail: `Emailing encounter report to primary care team`,
-      status: "running", color: "text-blue-400",
-    }, updateDelay + 200);
-
-    setTimeout(() => {
-      entries[1] = { ...entries[1], status: "sent", detail: `SOAP note sent to primarycare@clinic.org for ${patientName}` };
-      setAgentLog([...entries]);
-    }, updateDelay + 1500);
-
+    // Step 3: Alert care team (if alerts)
     if (hasAlerts) {
-      addEntry({
-        timestamp: Date.now(), action: "Alerting Care Team", icon: "🚨",
-        detail: `Flagging clinical alerts for immediate review`,
-        status: "running", color: "text-rose-400",
-      }, updateDelay + 1800);
-
-      setTimeout(() => {
-        entries[2] = { ...entries[2], status: "sent", detail: "Alert notification sent to attending physician" };
-        setAgentLog([...entries]);
-      }, updateDelay + 3000);
+      steps.push({
+        entry: { timestamp: Date.now(), action: "Alerting Care Team", icon: "🚨", detail: `Flagging clinical alerts for immediate review`, status: "running", color: "text-rose-400" },
+        startDelay: t,
+        doneDelay: t + 1200,
+        doneUpdate: { status: "sent", detail: "Alert notification sent to attending physician" },
+      });
+      t += 1500;
     }
 
+    // Step 4: Dispatch referral (if referrals)
     if (hasReferrals) {
       const refDept = (referrals[0]?.content as Record<string, string>)?.department || "Specialist";
-      const refIdx = hasAlerts ? 3 : 2;
-      addEntry({
-        timestamp: Date.now(), action: "Dispatching Referral", icon: "🏥",
-        detail: `Sending referral request to ${refDept}`,
-        status: "running", color: "text-emerald-400",
-      }, updateDelay + (hasAlerts ? 3200 : 2000));
-
-      setTimeout(() => {
-        entries[refIdx] = { ...entries[refIdx], status: "sent", detail: `Referral sent to ${refDept} — awaiting scheduling` };
-        setAgentLog([...entries]);
-      }, updateDelay + (hasAlerts ? 4500 : 3200));
+      steps.push({
+        entry: { timestamp: Date.now(), action: "Dispatching Referral", icon: "🏥", detail: `Sending referral request to ${refDept}`, status: "running", color: "text-emerald-400" },
+        startDelay: t,
+        doneDelay: t + 1300,
+        doneUpdate: { status: "sent", detail: `Referral sent to ${refDept} — awaiting scheduling` },
+      });
+      t += 1600;
     }
 
-    const followUpIdx = entries.length;
-    const followUpDelay = updateDelay + (hasAlerts ? 4800 : hasReferrals ? 3500 : 2000);
-    addEntry({
-      timestamp: Date.now(), action: "Scheduling Follow-up", icon: "📅",
-      detail: `Setting 2-week follow-up reminder`,
-      status: "running", color: "text-amber-400",
-    }, followUpDelay);
+    // Step 5: Schedule appointment (the new feature!)
+    steps.push({
+      entry: { timestamp: Date.now(), action: "Booking Appointment", icon: "📅", detail: `Checking clinic schedule for follow-up...`, status: "running", color: "text-amber-400" },
+      startDelay: t,
+      doneDelay: t + 2200,
+      doneUpdate: { status: "done", detail: "" }, // will be set dynamically
+    });
+    t += 2500;
 
-    setTimeout(() => {
-      if (entries[followUpIdx]) {
-        entries[followUpIdx] = { ...entries[followUpIdx], status: "done", detail: "Follow-up reminder set for 2 weeks" };
-      }
-      setAgentLog([...entries]);
-      setAgentActive(false);
-    }, followUpDelay + 1200);
+    // Step 6: Email to sub-department
+    const targetDept = hasReferrals
+      ? ((referrals[0]?.content as Record<string, string>)?.department || "Specialist Dept")
+      : "Primary Care";
+    steps.push({
+      entry: { timestamp: Date.now(), action: "Routing to Department", icon: "📨", detail: `Sending records to ${targetDept}`, status: "running", color: "text-violet-400" },
+      startDelay: t,
+      doneDelay: t + 1200,
+      doneUpdate: { status: "sent", detail: `Full report emailed to ${targetDept.toLowerCase().replace(/\s/g, "")}@clinic.org` },
+    });
+    t += 1500;
+
+    // Execute the timeline
+    const logEntries: AgentLogEntry[] = [];
+
+    steps.forEach((step, i) => {
+      // Add entry (running state)
+      setTimeout(() => {
+        logEntries.push({ ...step.entry, id: `agent-${i}` });
+        setAgentLog([...logEntries]);
+
+        // Handle record update
+        if (step.recordUpdate && step.recordUpdateDelay !== undefined) {
+          setTimeout(() => {
+            setLiveRecordUpdates(prev => [...prev, step.recordUpdate!]);
+          }, step.recordUpdateDelay - step.startDelay);
+        }
+      }, step.startDelay);
+
+      // Mark done
+      setTimeout(() => {
+        const entry = logEntries.find(e => e.id === `agent-${i}`);
+        if (entry) {
+          // Special handling for appointment booking — simulate schedule check
+          if (step.entry.action === "Booking Appointment") {
+            entry.status = "done";
+            entry.detail = getAppointmentResult(hasReferrals ? targetDept : "Follow-up");
+          } else {
+            Object.assign(entry, step.doneUpdate);
+          }
+          setAgentLog([...logEntries]);
+        }
+
+        // If last step, deactivate
+        if (i === steps.length - 1) {
+          setAgentActive(false);
+        }
+      }, step.doneDelay);
+    });
   }, []);
 
   // === INSTANT MODE ===
