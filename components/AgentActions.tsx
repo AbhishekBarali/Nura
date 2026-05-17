@@ -10,20 +10,21 @@ interface AgentActionsProps {
   isProcessing: boolean;
 }
 
-export default function AgentActions({ actions, summary, isProcessing }: AgentActionsProps) {
+export default function AgentActions({ actions = [], summary, isProcessing }: AgentActionsProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const safeActions = actions || [];
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [actions]);
+  }, [safeActions]);
 
-  const alerts = actions.filter((a) => a.type === "alert");
-  const medications = actions.filter((a) => a.type === "medication");
-  const symptoms = actions.filter((a) => a.type === "symptom");
-  const conditions = actions.filter((a) => a.type === "condition");
-  const referrals = actions.filter((a) => a.type === "referral");
+  const alerts = safeActions.filter((a) => a?.type === "alert");
+  const medications = safeActions.filter((a) => a?.type === "medication");
+  const symptoms = safeActions.filter((a) => a?.type === "symptom");
+  const conditions = safeActions.filter((a) => a?.type === "condition");
+  const referrals = safeActions.filter((a) => a?.type === "referral");
 
   return (
     <div className="elevated-card rounded-2xl flex flex-col h-full overflow-hidden">
@@ -44,8 +45,8 @@ export default function AgentActions({ actions, summary, isProcessing }: AgentAc
               <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Analyzing</span>
             </div>
           )}
-          {actions.length > 0 && (
-            <span className="text-[11px] font-mono text-[var(--text-muted)]">{actions.length}</span>
+          {safeActions.length > 0 && (
+            <span className="text-[11px] font-mono text-[var(--text-muted)]">{safeActions.length}</span>
           )}
         </div>
       </div>
@@ -55,7 +56,7 @@ export default function AgentActions({ actions, summary, isProcessing }: AgentAc
         ref={scrollRef}
         className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin min-h-[320px] max-h-[520px]"
       >
-        {actions.length === 0 && !isProcessing ? (
+        {safeActions.length === 0 && !isProcessing ? (
           <div className="flex flex-col items-center justify-center h-full text-center py-12">
             <div className="w-16 h-16 rounded-2xl bg-[var(--bg-surface)] flex items-center justify-center mb-4">
               <svg className="w-7 h-7 text-[var(--text-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -103,7 +104,7 @@ export default function AgentActions({ actions, summary, isProcessing }: AgentAc
       </div>
 
       {/* Stats footer */}
-      {actions.length > 0 && (
+      {safeActions.length > 0 && (
         <div className="px-5 py-3 border-t border-[var(--border-subtle)] flex items-center gap-4">
           {alerts.length > 0 && (
             <span className="text-[10px] font-bold text-rose-400 flex items-center gap-1">
