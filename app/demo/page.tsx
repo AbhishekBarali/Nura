@@ -9,6 +9,7 @@ import AgentActions from "@/components/AgentActions";
 import CompleteReport from "@/components/CompleteReport";
 import LiveMic from "@/components/LiveMic";
 import AgentLog, { AgentLogEntry } from "@/components/AgentLog";
+import AppointmentCalendar, { BookedAppointment } from "@/components/AppointmentCalendar";
 import { Patient, TranscriptLine, ActionCard, CompleteReportData } from "@/lib/types";
 
 type AppMode = "instant" | "live" | "upload";
@@ -39,6 +40,7 @@ export default function Home() {
   const [agentLog, setAgentLog] = useState<AgentLogEntry[]>([]);
   const [agentActive, setAgentActive] = useState(false);
   const [liveRecordUpdates, setLiveRecordUpdates] = useState<string[]>([]);
+  const [bookedAppointments, setBookedAppointments] = useState<BookedAppointment[]>([]);
 
   // Fetch patients on mount
   useEffect(() => {
@@ -88,18 +90,22 @@ export default function Home() {
   }, [isProcessing, mode, allTranscriptLines, allActions]);
 
   // Mock clinic schedule for appointment booking simulation
-  const getAppointmentResult = (department: string): string => {
+  const getAppointmentResult = (department: string, patientName: string): { text: string; appointment: BookedAppointment } => {
     const today = new Date();
     const dayOfWeek = today.getDay();
     // Simulate: next 2 days are "full", then find an open slot
     const daysUntilOpen = dayOfWeek <= 3 ? 3 : 5; // Thu or Mon
     const appointmentDate = new Date(today);
     appointmentDate.setDate(today.getDate() + daysUntilOpen);
+    appointmentDate.setHours(0, 0, 0, 0);
     const dayName = appointmentDate.toLocaleDateString("en-US", { weekday: "long" });
     const dateStr = appointmentDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
     const times = ["9:00 AM", "10:30 AM", "2:00 PM", "3:30 PM"];
     const slot = times[Math.floor(Math.random() * times.length)];
-    return `${department} — ${dayName} ${dateStr} at ${slot} (confirmed)`;
+    return {
+      text: `${department} — ${dayName} ${dateStr} at ${slot} (confirmed)`,
+      appointment: { date: appointmentDate, time: slot, department, patient: patientName },
+    };
   };
 
   // Trigger autonomous agent actions after analysis completes
@@ -232,8 +238,10 @@ export default function Home() {
         if (entry) {
           // Special handling for appointment booking — simulate schedule check
           if (step.entry.action === "Booking Appointment") {
+            const result = getAppointmentResult(hasReferrals ? targetDept : "Follow-up", patientName);
             entry.status = "done";
-            entry.detail = getAppointmentResult(hasReferrals ? targetDept : "Follow-up");
+            entry.detail = result.text;
+            setBookedAppointments(prev => [...prev, result.appointment]);
           } else {
             Object.assign(entry, step.doneUpdate);
           }
@@ -478,6 +486,7 @@ export default function Home() {
     setAgentLog([]);
     setAgentActive(false);
     setLiveRecordUpdates([]);
+    setBookedAppointments([]);
   };
 
   const isActive = isProcessing || isLiveActive;
@@ -687,40 +696,50 @@ export default function Home() {
             {/* RIGHT PANEL — Live Results */}
             <div className="lg:col-span-8 space-y-4">
               {!hasResults && !isActive ? (
-                <div className="elevated-card rounded-xl h-full flex flex-col items-center justify-center p-12 text-center min-h-[500px]">
-                  <div className="w-16 h-16 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center mb-5">
-                    <svg className="w-8 h-8 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
-                    </svg>
+                <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 h-[calc(100vh-160px)]">
+                  <div className="xl:col-span-8 elevated-card rounded-xl h-full flex flex-col items-center justify-center p-12 text-center min-h-[500px]">
+                    <div className="w-16 h-16 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center mb-5">
+                      <svg className="w-8 h-8 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-display font-semibold text-[var(--text-primary)] mb-2">Ready to Analyze</h3>
+                    <p className="text-sm text-[var(--text-muted)] max-w-md leading-relaxed">
+                      {mode === "instant" && "Select a clinical scenario on the left and click Analyze to see the agent pipeline in action."}
+                      {mode === "upload" && "Upload an audio recording of a clinical encounter. The AI will transcribe, identify speakers, and analyze automatically."}
+                      {mode === "live" && "Click the microphone to start recording. Speak or play audio near your mic — the agent analyzes in real-time."}
+                    </p>
+                    <div className="flex items-center gap-4 mt-6 text-xs text-[var(--text-muted)]">
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-blue-400" />
+                        Speaker ID
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-red-400" />
+                        Drug Alerts
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                        SOAP Notes
+                      </span>
+                    </div>
                   </div>
-                  <h3 className="text-lg font-display font-semibold text-[var(--text-primary)] mb-2">Ready to Analyze</h3>
-                  <p className="text-sm text-[var(--text-muted)] max-w-md leading-relaxed">
-                    {mode === "instant" && "Select a clinical scenario on the left and click Analyze to see the agent pipeline in action."}
-                    {mode === "upload" && "Upload an audio recording of a clinical encounter. The AI will transcribe, identify speakers, and analyze automatically."}
-                    {mode === "live" && "Click the microphone to start recording. Speak or play audio near your mic — the agent analyzes in real-time."}
-                  </p>
-                  <div className="flex items-center gap-4 mt-6 text-xs text-[var(--text-muted)]">
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-blue-400" />
-                      Speaker ID
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-red-400" />
-                      Drug Alerts
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                      SOAP Notes
-                    </span>
+                  <div className="xl:col-span-4">
+                    <AppointmentCalendar appointments={bookedAppointments} />
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 h-[calc(100vh-160px)]">
-                  <div className="xl:col-span-5 min-h-0">
-                    <LiveTranscript lines={transcriptLines} isProcessing={isActive} />
-                  </div>
-                  <div className="xl:col-span-7 min-h-0">
-                    <AgentActions actions={actions} summary={summary} isProcessing={isActive} />
+                <div className="space-y-4 h-[calc(100vh-160px)]">
+                  <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 h-full">
+                    <div className="xl:col-span-4 min-h-0">
+                      <LiveTranscript lines={transcriptLines} isProcessing={isActive} />
+                    </div>
+                    <div className="xl:col-span-5 min-h-0">
+                      <AgentActions actions={actions} summary={summary} isProcessing={isActive} />
+                    </div>
+                    <div className="xl:col-span-3 min-h-0">
+                      <AppointmentCalendar appointments={bookedAppointments} />
+                    </div>
                   </div>
                 </div>
               )}
