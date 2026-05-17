@@ -64,6 +64,11 @@ export default function LiveMic({
   const sentenceStartTimeRef = useRef<number>(0);
   const flushTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Speaker role calibration
+  const speakerMapRef = useRef<Record<string, string>>({ S1: "Doctor", S2: "Patient" });
+  const calibrationDoneRef = useRef(false);
+  const calibrationUtterancesRef = useRef<Array<{ speaker: string; text: string }>>([]);
+
   // Keep callback refs fresh
   const onTranscriptLineRef = useRef(onTranscriptLine);
   const onActionRef = useRef(onAction);
@@ -132,10 +137,63 @@ export default function LiveMic({
     }
   }, [triggerAnalysis]);
 
-  // Convert speaker label (S1, S2) to Doctor/Patient
+  // Convert speaker label (S1, S2) to Doctor/Patient using calibration
   const mapSpeaker = (label: string): string => {
-    return label === "S1" ? "Doctor" : "Patient";
+    return speakerMapRef.current[label] || "Doctor";
   };
+
+  // Calibrate speaker roles based on content analysis
+  const calibrateSpeakers = useCallback((utterances: Array<{ speaker: string; text: string }>) => {
+    // Score each speaker - higher score = more likely to be the DOCTOR
+    const scores: Record<string, number> = {};
+    
+    // Doctor patterns: questions, medical terms, directives, short professional phrases
+    const doctorPatterns = [
+      /\?/g,                          // asks questions
+      /how (are|long|often|much)/i,   // clinical questions
+      /tell me|remind me|let me/i,    // directives
+      /prescri|medicat|diagnos|exam|symptom|treatment|dose|mg|blood pressure|heart rate/i, // medical terms
+      /I (want to|need to|'ll|will|would like to) (check|review|prescribe|order|refer|examine|schedule)/i,
+      /any (other|allergies|issues|concerns|medications)/i,
+      /what brings you/i,
+      /good (morning|afternoon|evening)/i,  // greeting (doctor usually initiates)
+    ];
+    
+    // Patient patterns: describing symptoms, personal experiences, complaints
+    const patientPatterns = [
+      /my (back|head|stomach|chest|leg|arm|knee|foot|feet|neck|shoulder|pain|medication)/i,
+      /I('ve| have| am| feel| been|'m) (feeling|taking|having|experiencing|getting|been)/i,
+      /it (hurts|aches|burns|tingles|swells|makes me)/i,
+      /dizzy|nauseous|tired|fatigued|sore|swollen|bleeding|itching/i,
+      /worse|better|started|noticed|woke up/i,
+      /every (day|night|morning|time)/i,
+      /for (weeks|days|months|years|a while|about)/i,
+      /not great|not good|terrible|awful/i,
+    ];
+
+    for (const utt of utterances) {
+      if (!scores[utt.speaker]) scores[utt.speaker] = 0;
+      const text = utt.text;
+      
+      for (const pattern of doctorPatterns) {
+        const matches = text.match(pattern);
+        if (matches) scores[utt.speaker] += matches.length * 2;
+      }
+      for (const pattern of patientPatterns) {
+        const matches = text.match(pattern);
+        if (matches) scores[utt.speaker] -= matches.length * 2;
+      }
+    }
+
+    // The speaker with the higher score is the doctor
+    const speakers = Object.keys(scores);
+    if (speakers.length >= 2) {
+      const sorted = speakers.sort((a, b) => scores[b] - scores[a]);
+      speakerMapRef.current = { [sorted[0]]: "Doctor", [sorted[1]]: "Patient" };
+    }
+    
+    calibrationDoneRef.current = true;
+  }, []);
 
   // Flush the sentence buffer as a complete transcript line
   const flushSentenceBuffer = useCallback(() => {
@@ -143,15 +201,27 @@ export default function LiveMic({
     const text = sentenceBufferRef.current.trim();
     if (!text) return;
 
+    const rawSpeaker = sentenceSpeakerRef.current;
+    
+    // Collect utterances for calibration
+    if (!calibrationDoneRef.current) {
+      calibrationUtterancesRef.current.push({ speaker: rawSpeaker, text });
+      // Calibrate after we have at least 4 utterances from at least 2 speakers
+      const speakers = new Set(calibrationUtterancesRef.current.map(u => u.speaker));
+      if (calibrationUtterancesRef.current.length >= 4 && speakers.size >= 2) {
+        calibrateSpeakers(calibrationUtterancesRef.current);
+      }
+    }
+
     const timestamp = (Date.now() - startTimeRef.current) / 1000;
-    const speaker = mapSpeaker(sentenceSpeakerRef.current);
+    const speaker = mapSpeaker(rawSpeaker);
     lineCountRef.current++;
 
     onTranscriptLineRef.current({ speaker, text, timestamp });
     transcriptBufferRef.current += `${speaker}: ${text}\n`;
     sentenceBufferRef.current = "";
     scheduleAnalysis(timestamp);
-  }, [scheduleAnalysis]);
+  }, [scheduleAnalysis, calibrateSpeakers]);
 
   // Schedule a flush after a pause (speaker stopped talking)
   const scheduleFlush = useCallback(() => {
@@ -215,6 +285,10 @@ export default function LiveMic({
     setSimulationActive(false);
     lineCountRef.current = 0;
     transcriptBufferRef.current = "";
+    // Reset calibration for new session
+    calibrationDoneRef.current = false;
+    calibrationUtterancesRef.current = [];
+    speakerMapRef.current = { S1: "Doctor", S2: "Patient" };
 
     try {
       // 1. Get microphone access
