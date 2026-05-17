@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getPatientById } from "@/lib/db";
 import { analyzeTranscriptChunk } from "@/lib/llm";
 import { checkDrugInteractions, checkAllergyConflict } from "@/lib/drug-interactions";
-import { ActionCard } from "@/lib/types";
+import { ActionCard, Patient } from "@/lib/types";
 
 let actionCounter = 0;
 
@@ -10,9 +10,25 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const { patientId, transcript, timestamp } = body;
 
-  const patient = getPatientById(patientId);
-  if (!patient) {
-    return NextResponse.json({ error: "Patient not found" }, { status: 404 });
+  // Allow operation without a patient (use empty defaults)
+  let patient: Patient;
+  if (patientId && patientId > 0) {
+    const dbPatient = getPatientById(patientId);
+    if (!dbPatient) {
+      return NextResponse.json({ error: "Patient not found" }, { status: 404 });
+    }
+    patient = dbPatient;
+  } else {
+    patient = {
+      id: 0,
+      name: "Unknown Patient",
+      age: 0,
+      gender: "Unknown",
+      allergies: [],
+      current_medications: [],
+      conditions: [],
+      history: [],
+    };
   }
 
   const actions: ActionCard[] = [];

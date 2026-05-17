@@ -26,7 +26,7 @@ export async function analyzeTranscriptChunk(
   patient: Patient,
   transcript: string
 ): Promise<LLMAnalysisResult> {
-  const provider = process.env.LLM_PROVIDER || "gemini";
+  const provider = (process.env.LLM_PROVIDER || "gemini").toLowerCase();
   const prompt = getClinicalAnalysisPrompt(patient, transcript);
 
   try {
@@ -56,7 +56,7 @@ export async function generateSOAPNote(
   fullTranscript: string,
   actionsDescription: string
 ): Promise<SOAPNote> {
-  const provider = process.env.LLM_PROVIDER || "gemini";
+  const provider = (process.env.LLM_PROVIDER || "gemini").toLowerCase();
   const prompt = getSOAPNotePrompt(patient, fullTranscript, actionsDescription);
 
   try {

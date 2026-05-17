@@ -9,7 +9,9 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const { patientId, demoId } = body;
 
-  const patient = getPatientById(patientId);
+  // Auto-match patient from demoId if not provided or invalid
+  const resolvedPatientId = patientId || demoId;
+  const patient = getPatientById(resolvedPatientId);
   if (!patient) {
     return NextResponse.json({ error: "Patient not found" }, { status: 404 });
   }
@@ -68,6 +70,7 @@ export async function POST(request: NextRequest) {
     total_actions: allActions.length,
     time_saved: "12 minutes",
     duration: demo.duration,
+    patient: patient,
   });
 }
 

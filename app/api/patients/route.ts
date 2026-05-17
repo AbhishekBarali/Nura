@@ -16,3 +16,5 @@ export async function GET(request: Request) {
   const patients = getAllPatients();
   return NextResponse.json(patients);
 }
+
+export const dynamic = "force-dynamic";

@@ -132,12 +132,12 @@ export default function LiveMic({
   }, [patientId]);
 
   const triggerAnalysis = useCallback(async (transcript: string, timestamp: number) => {
-    if (!patientId || !transcript.trim()) return;
+    if (!transcript.trim()) return;
     try {
       const response = await fetch("/api/analyze-chunk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ patientId, transcript, timestamp }),
+        body: JSON.stringify({ patientId: patientId || 0, transcript, timestamp }),
       });
       if (!response.ok) return;
       const data = await response.json();

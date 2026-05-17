@@ -1,328 +1,447 @@
-import { NextRequest } from "next/server";
-import { getPatientById } from "@/lib/db";
-import { analyzeTranscriptChunk, generateSOAPNote } from "@/lib/llm";
-import { getDemoTranscript } from "@/lib/speechmatics";
+import { NextRequest, NextResponse } from "next/server";
+import { getPatientById, getAllPatients } from "@/lib/db";
 import { checkDrugInteractions, checkAllergyConflict } from "@/lib/drug-interactions";
-import { ActionCard, LLMAnalysisResult, TranscriptLine } from "@/lib/types";
+import { ActionCard, TranscriptLine, Patient } from "@/lib/types";
+import OpenAI from "openai";
+
+export const dynamic = "force-dynamic";
+
+function getLLMClient() {
+  const apiKey = process.env.FEATHERLESS_API_KEY;
+  if (!apiKey || apiKey === "your_key_here") return null;
+  return new OpenAI({
+    baseURL: process.env.FEATHERLESS_BASE_URL || "https://api.featherless.ai/v1",
+    apiKey,
+  });
+}
+
+async function callLLM(prompt: string): Promise<string> {
+  const client = getLLMClient();
+  if (!client) throw new Error("LLM API key not configured");
+  const response = await client.chat.completions.create({
+    model: process.env.FEATHERLESS_MODEL_NAME || "google/gemma-4-31B-it",
+    messages: [{ role: "user", content: prompt }],
+    temperature: 0.1,
+    max_tokens: 3000,
+  });
+  return response.choices[0]?.message?.content || "{}";
+}
+
+// Transcribe audio using Speechmatics Batch API
+async function transcribeWithSpeechmatics(audioBuffer: ArrayBuffer, mimeType: string): Promise<{
+  transcript: TranscriptLine[];
+  duration: number;
+}> {
+  const apiKey = process.env.SPEECHMATICS_API_KEY;
+  if (!apiKey || apiKey === "your_key_here") {
+    throw new Error("SPEECHMATICS_API_KEY not configured");
+  }
+
+  const config = JSON.stringify({
+    type: "transcription",
+    transcription_config: {
+      language: "en",
+      diarization: "speaker",
+      operating_point: "enhanced",
+      speaker_diarization_config: {
+        max_speakers: 2,
+      },
+    },
+  });
+
+  // Submit batch job
+  const formData = new FormData();
+  const audioBlob = new Blob([audioBuffer], { type: mimeType });
+  formData.append("data_file", audioBlob, "audio.wav");
+  formData.append("config", config);
+
+  const submitResponse = await fetch("https://asr.api.speechmatics.com/v2/jobs", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: formData,
+  });
+
+  if (!submitResponse.ok) {
+    const errText = await submitResponse.text();
+    throw new Error(`Speechmatics submit failed: ${submitResponse.status} ${errText}`);
+  }
+
+  const { id: jobId } = await submitResponse.json();
+
+  // Poll for completion (max 60 seconds)
+  let attempts = 0;
+  const maxAttempts = 30;
+  while (attempts < maxAttempts) {
+    await new Promise((r) => setTimeout(r, 2000));
+    attempts++;
+
+    const statusResponse = await fetch(`https://asr.api.speechmatics.com/v2/jobs/${jobId}`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+
+    if (!statusResponse.ok) continue;
+    const statusData = await statusResponse.json();
+
+    if (statusData.job?.status === "done") {
+      // Get transcript
+      const transcriptResponse = await fetch(
+        `https://asr.api.speechmatics.com/v2/jobs/${jobId}/transcript?format=json-v2`,
+        { headers: { Authorization: `Bearer ${apiKey}` } }
+      );
+
+      if (!transcriptResponse.ok) {
+        throw new Error("Failed to fetch transcript from Speechmatics");
+      }
+
+      const transcriptData = await transcriptResponse.json();
+      return parseSpeechmaticsResult(transcriptData);
+    } else if (statusData.job?.status === "rejected" || statusData.job?.status === "deleted") {
+      throw new Error(`Speechmatics job ${statusData.job.status}: ${statusData.job.error || "unknown error"}`);
+    }
+  }
+
+  throw new Error("Speechmatics transcription timed out");
+}
+
+function parseSpeechmaticsResult(data: Record<string, unknown>): {
+  transcript: TranscriptLine[];
+  duration: number;
+} {
+  const results = (data.results || []) as Array<{
+    type: string;
+    start_time: number;
+    end_time: number;
+    alternatives?: Array<{ content: string; speaker?: string }>;
+    channel?: string;
+  }>;
+
+  // Group words into utterances by speaker changes and pauses
+  const lines: TranscriptLine[] = [];
+  let currentSpeaker = "";
+  let currentText = "";
+  let currentTimestamp = 0;
+  let lastEndTime = 0;
+
+  for (const result of results) {
+    if (result.type !== "word") continue;
+    const alt = result.alternatives?.[0];
+    if (!alt) continue;
+
+    const speaker = alt.speaker || "S1";
+    const word = alt.content;
+    const startTime = result.start_time;
+
+    // New utterance if speaker changes or pause > 1.5s
+    if (speaker !== currentSpeaker || (startTime - lastEndTime > 1.5 && currentText)) {
+      if (currentText.trim()) {
+        lines.push({
+          speaker: mapSpeaker(currentSpeaker),
+          text: currentText.trim(),
+          timestamp: currentTimestamp,
+        });
+      }
+      currentSpeaker = speaker;
+      currentText = word;
+      currentTimestamp = startTime;
+    } else {
+      currentText += " " + word;
+    }
+    lastEndTime = result.end_time;
+  }
+
+  // Push last utterance
+  if (currentText.trim()) {
+    lines.push({
+      speaker: mapSpeaker(currentSpeaker),
+      text: currentText.trim(),
+      timestamp: currentTimestamp,
+    });
+  }
+
+  const duration = lastEndTime || 60;
+  return { transcript: lines, duration };
+}
+
+function mapSpeaker(speaker: string): string {
+  // Map speaker labels to Doctor/Patient
+  // Heuristic: first speaker is usually the Doctor
+  if (speaker === "S1" || speaker === "speaker_0") return "Doctor";
+  return "Patient";
+}
 
 export async function POST(request: NextRequest) {
-  const body = await request.json();
-  const { patientId, demoId } = body;
+  try {
+    const formData = await request.formData();
+    const audioFile = formData.get("audio") as File | null;
+    const patientIdStr = formData.get("patientId") as string | null;
 
-  const patient = getPatientById(patientId);
-  if (!patient) {
-    return new Response(JSON.stringify({ error: "Patient not found" }), {
-      status: 404,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
+    if (!audioFile) {
+      return NextResponse.json({ error: "No audio file provided" }, { status: 400 });
+    }
 
-  const demo = getDemoTranscript(demoId);
-  if (!demo) {
-    return new Response(JSON.stringify({ error: "Demo not found" }), {
-      status: 404,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
+    // Get patient context if provided
+    let patient: Patient | null = null;
+    if (patientIdStr && parseInt(patientIdStr) > 0) {
+      patient = getPatientById(parseInt(patientIdStr));
+    }
 
-  // Create SSE stream
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    async start(controller) {
-      const sendEvent = (type: string, data: unknown) => {
-        const event = `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
-        controller.enqueue(encoder.encode(event));
-      };
+    const arrayBuffer = await audioFile.arrayBuffer();
+    const mimeType = audioFile.type || "audio/wav";
 
-      const allActions: ActionCard[] = [];
-      let fullTranscript = "";
-      let actionCounter = 0;
+    // Step 1: Transcribe with Speechmatics (speaker diarization)
+    let transcript: TranscriptLine[];
+    let audioDuration: number;
 
-      // Process transcript lines in chunks (simulating real-time)
-      const chunkSize = 3; // Process 3 lines at a time
-      for (let i = 0; i < demo.lines.length; i += chunkSize) {
-        const chunk = demo.lines.slice(i, i + chunkSize);
+    try {
+      const result = await transcribeWithSpeechmatics(arrayBuffer, mimeType);
+      transcript = result.transcript;
+      audioDuration = result.duration;
+    } catch (speechError) {
+      console.error("Speechmatics transcription failed:", speechError);
+      return NextResponse.json(
+        { error: `Transcription failed: ${speechError instanceof Error ? speechError.message : "Unknown error"}` },
+        { status: 500 }
+      );
+    }
 
-        // Send each transcript line with delay
-        for (const line of chunk) {
-          sendEvent("transcript", {
-            speaker: line.speaker,
-            text: line.text,
-            timestamp: line.timestamp,
+    if (transcript.length === 0) {
+      return NextResponse.json(
+        { error: "No speech detected in audio. Please upload a clearer recording." },
+        { status: 422 }
+      );
+    }
+
+    // Step 2: Use LLM to identify speakers and extract clinical info
+    const fullTranscriptText = transcript.map((l) => `${l.speaker}: ${l.text}`).join("\n");
+    let detectedInfo: { name?: string; symptoms?: string[]; medications_mentioned?: string[]; allergies_mentioned?: string[] } = {};
+
+    try {
+      const analysisPrompt = `You are a clinical NLP system. Analyze this doctor-patient conversation transcript.
+
+TRANSCRIPT:
+${fullTranscriptText}
+
+Tasks:
+1. Determine which speaker is the Doctor and which is the Patient based on context (who asks questions vs who reports symptoms)
+2. Extract clinical information
+
+Respond in this exact JSON format:
+{
+  "speaker_mapping": { "Doctor": "Doctor", "Patient": "Patient" },
+  "detected_patient_info": {
+    "name": "patient name if mentioned or null",
+    "symptoms": ["list of symptoms mentioned"],
+    "medications_mentioned": ["any drugs/medications mentioned"],
+    "allergies_mentioned": ["any allergies mentioned"]
+  },
+  "corrected_transcript": [
+    { "speaker": "Doctor", "text": "first utterance", "timestamp": 0.0 }
+  ]
+}
+
+If speakers are already correctly labeled, return the transcript as-is in corrected_transcript.
+Respond ONLY with valid JSON.`;
+
+      const analysisText = await callLLM(analysisPrompt);
+      const cleaned = analysisText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      const analysisResult = JSON.parse(cleaned);
+
+      if (analysisResult.corrected_transcript?.length > 0) {
+        transcript = analysisResult.corrected_transcript;
+      }
+      detectedInfo = analysisResult.detected_patient_info || {};
+    } catch (e) {
+      console.error("LLM speaker analysis failed (continuing with raw transcript):", e);
+    }
+
+    // Step 3: Match or create patient context
+    if (!patient) {
+      const allPatients = getAllPatients();
+      if (detectedInfo.name) {
+        patient = allPatients.find(
+          (p) => p.name.toLowerCase().includes(detectedInfo.name!.toLowerCase())
+        ) || null;
+      }
+      if (!patient && detectedInfo.medications_mentioned?.length) {
+        patient = allPatients.find((p) =>
+          p.current_medications.some((m) =>
+            (detectedInfo.medications_mentioned || []).some(
+              (dm: string) => dm.toLowerCase().includes(m.name.toLowerCase())
+            )
+          )
+        ) || null;
+      }
+      if (!patient) {
+        patient = {
+          id: 0,
+          name: detectedInfo.name || "Unknown Patient",
+          age: 0,
+          gender: "Unknown",
+          allergies: detectedInfo.allergies_mentioned || [],
+          current_medications: (detectedInfo.medications_mentioned || []).map((m: string) => ({
+            name: m, dosage: "", frequency: "",
+          })),
+          conditions: [],
+          history: [],
+        };
+      }
+    }
+
+    // Step 4: Run clinical analysis
+    const allActions: ActionCard[] = [];
+    let actionCounter = 0;
+    const textLower = fullTranscriptText.toLowerCase();
+    const detectedDrugs: string[] = [];
+
+    const commonDrugs = [
+      "ibuprofen", "lisinopril", "metformin", "omeprazole", "atorvastatin",
+      "bactrim", "amoxicillin", "aspirin", "warfarin", "acetaminophen",
+      "nitrofurantoin", "sulfamethoxazole", "penicillin",
+    ];
+
+    for (const drug of commonDrugs) {
+      if (textLower.includes(drug)) {
+        detectedDrugs.push(drug);
+        const timestamp = transcript.find(
+          (l) => l.text.toLowerCase().includes(drug)
+        )?.timestamp || 0;
+
+        allActions.push({
+          id: `action-${actionCounter++}`,
+          type: "medication",
+          timestamp,
+          content: { name: drug.charAt(0).toUpperCase() + drug.slice(1), dosage: "", context: "Mentioned in conversation" },
+        });
+
+        const currentMedNames = patient.current_medications.map((m) => m.name);
+        const interactions = checkDrugInteractions(drug, currentMedNames);
+        for (const interaction of interactions) {
+          allActions.push({
+            id: `action-${actionCounter++}`,
+            type: "alert",
+            timestamp,
+            severity: interaction.severity,
+            content: {
+              type: "drug_interaction",
+              description: interaction.description,
+              action_taken: interaction.recommendation,
+              drugs: [interaction.drug1, interaction.drug2],
+            },
           });
-          fullTranscript += `${line.speaker}: ${line.text}\n`;
-
-          // Simulate real-time delay between lines
-          await delay(800);
         }
 
-        // Analyze the chunk
-        const chunkText = chunk.map((l: TranscriptLine) => `${l.speaker}: ${l.text}`).join("\n");
-        const timestamp = chunk[chunk.length - 1].timestamp;
-
-        try {
-          const analysis = await analyzeTranscriptChunk(patient, chunkText);
-
-          // Process LLM results and also run local checks
-          const actions = processAnalysis(analysis, patient, timestamp, actionCounter);
-          actionCounter += actions.length;
-
-          for (const action of actions) {
-            allActions.push(action);
-            if (action.type === "alert") {
-              sendEvent("alert", action);
-            } else {
-              sendEvent("action", action);
-            }
-            await delay(300);
-          }
-
-          // Send summary update
-          if (analysis.summary_addition) {
-            sendEvent("summary", { text: analysis.summary_addition, timestamp });
-          }
-        } catch (error) {
-          console.error("Analysis error:", error);
-          // Run local-only checks as fallback
-          const localActions = runLocalChecks(chunk, patient, timestamp, actionCounter);
-          actionCounter += localActions.length;
-          for (const action of localActions) {
-            allActions.push(action);
-            if (action.type === "alert") {
-              sendEvent("alert", action);
-            } else {
-              sendEvent("action", action);
-            }
-          }
+        const allergyConflict = checkAllergyConflict(drug, patient.allergies);
+        if (allergyConflict) {
+          allActions.push({
+            id: `action-${actionCounter++}`,
+            type: "alert",
+            timestamp,
+            severity: "high",
+            content: {
+              type: "allergy_conflict",
+              description: allergyConflict.description,
+              action_taken: "ALERT: Do not prescribe. Consider alternative medication.",
+              allergen: allergyConflict.allergen,
+            },
+          });
         }
-
-        await delay(500);
       }
+    }
 
-      // Generate final report
-      try {
-        const actionsDescription = allActions
-          .map((a) => `[${a.type}] ${JSON.stringify(a.content)}`)
-          .join("\n");
+    // Detect symptoms
+    const symptomMap: Record<string, string> = {
+      "dizzy": "Dizziness", "dizziness": "Dizziness", "swelling": "Swelling",
+      "tightness": "Chest tightness", "pressure": "Chest pressure",
+      "short of breath": "Shortness of breath", "nausea": "Nausea",
+      "tingling": "Tingling", "pain": "Pain", "headache": "Headache",
+      "fever": "Fever", "cough": "Cough",
+    };
 
-        const soapNote = await generateSOAPNote(patient, fullTranscript, actionsDescription);
-
-        sendEvent("complete", {
-          soap_note: soapNote,
-          actions: allActions,
-          total_actions: allActions.length,
-          time_saved: "12 minutes",
-        });
-      } catch {
-        sendEvent("complete", {
-          soap_note: {
-            subjective: "Patient encounter documented by Nura.",
-            objective: "See transcript for details.",
-            assessment: "Clinical analysis completed.",
-            plan: "Follow up on flagged items.",
-          },
-          actions: allActions,
-          total_actions: allActions.length,
-          time_saved: "12 minutes",
+    for (const [keyword, label] of Object.entries(symptomMap)) {
+      if (textLower.includes(keyword)) {
+        const timestamp = transcript.find(
+          (l) => l.text.toLowerCase().includes(keyword)
+        )?.timestamp || 0;
+        allActions.push({
+          id: `action-${actionCounter++}`,
+          type: "symptom",
+          timestamp,
+          content: { description: label, severity: "moderate", reported_by: "patient" },
         });
       }
+    }
 
-      controller.close();
-    },
-  });
+    // Detect urgency
+    const urgentKeywords = ["chest pain", "chest tightness", "can't breathe", "cardiac", "heart attack", "stroke", "emergency"];
+    const isUrgent = urgentKeywords.some((k) => textLower.includes(k));
+    if (isUrgent) {
+      allActions.push({
+        id: `action-${actionCounter++}`,
+        type: "referral",
+        timestamp: transcript[transcript.length - 1]?.timestamp || 0,
+        content: { department: "Cardiology/Emergency", reason: "Urgent symptoms detected", urgency: "immediate" },
+      });
+    }
 
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    },
-  });
+    // Step 5: Generate SOAP note with LLM
+    let soapNote = {
+      subjective: "Patient encounter transcribed from audio.",
+      objective: "See transcript for clinical details.",
+      assessment: "Clinical analysis completed.",
+      plan: "Review flagged items and follow up.",
+    };
+
+    try {
+      const soapPrompt = `Generate a SOAP note for this clinical encounter. Be concise and clinical.
+
+PATIENT: ${patient.name}${patient.age ? `, ${patient.age}yo ${patient.gender}` : ""}
+ALLERGIES: ${patient.allergies.join(", ") || "None known"}
+MEDICATIONS: ${patient.current_medications.map(m => m.name).join(", ") || "None known"}
+
+TRANSCRIPT:
+${fullTranscriptText}
+
+DETECTED ACTIONS: ${allActions.map(a => `[${a.type}] ${JSON.stringify(a.content)}`).join("; ")}
+
+Respond in this exact JSON format:
+{
+  "subjective": "What the patient reported",
+  "objective": "Clinical observations",
+  "assessment": "Clinical analysis",
+  "plan": "Recommended next steps"
 }
 
-function processAnalysis(
-  analysis: LLMAnalysisResult,
-  patient: { allergies: string[]; current_medications: Array<{ name: string }> },
-  timestamp: number,
-  startId: number
-): ActionCard[] {
-  const actions: ActionCard[] = [];
-  let id = startId;
+Respond ONLY with valid JSON. No markdown.`;
 
-  // Process medications
-  for (const med of analysis.medications_detected) {
-    actions.push({
-      id: `action-${id++}`,
-      type: "medication",
-      timestamp,
-      content: { name: med.name, dosage: med.dosage, context: med.context },
-    });
-
-    // Local drug interaction check
-    const currentMedNames = patient.current_medications.map((m) => m.name);
-    const interactions = checkDrugInteractions(med.name, currentMedNames);
-    for (const interaction of interactions) {
-      actions.push({
-        id: `action-${id++}`,
-        type: "alert",
-        timestamp,
-        severity: interaction.severity,
-        content: {
-          type: "drug_interaction",
-          description: interaction.description,
-          action_taken: interaction.recommendation,
-          drugs: [interaction.drug1, interaction.drug2],
-        },
-      });
+      const soapText = await callLLM(soapPrompt);
+      const cleanedSoap = soapText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      soapNote = JSON.parse(cleanedSoap);
+    } catch (e) {
+      console.error("SOAP generation failed:", e);
     }
 
-    // Local allergy check
-    const allergyConflict = checkAllergyConflict(med.name, patient.allergies);
-    if (allergyConflict) {
-      actions.push({
-        id: `action-${id++}`,
-        type: "alert",
-        timestamp,
-        severity: "high",
-        content: {
-          type: "allergy_conflict",
-          description: allergyConflict.description,
-          action_taken: "ALERT: Do not prescribe. Consider alternative medication.",
-          allergen: allergyConflict.allergen,
-        },
-      });
-    }
-  }
+    const summary = allActions.length > 0
+      ? `Analyzed ${transcript.length} utterances. Found ${detectedDrugs.length} medication(s), ${allActions.filter(a => a.type === "alert").length} alert(s).${isUrgent ? " URGENT findings." : ""}`
+      : `Transcribed ${transcript.length} utterances. No significant clinical findings detected.`;
 
-  // Process symptoms
-  for (const symptom of analysis.symptoms) {
-    actions.push({
-      id: `action-${id++}`,
-      type: "symptom",
-      timestamp,
-      content: { description: symptom.description, severity: symptom.severity, reported_by: symptom.reported_by },
+    return NextResponse.json({
+      transcript,
+      actions: allActions,
+      summary,
+      soap_note: soapNote,
+      total_actions: allActions.length,
+      time_saved: `${Math.max(5, Math.round(audioDuration / 4))} minutes`,
+      duration: audioDuration,
+      patient: patient.id > 0 ? patient : null,
+      detected_info: detectedInfo,
     });
-  }
-
-  // Process conditions
-  for (const condition of analysis.conditions) {
-    actions.push({
-      id: `action-${id++}`,
-      type: "condition",
-      timestamp,
-      content: { name: condition.name, status: condition.status },
-    });
-  }
-
-  // Process LLM-detected alerts
-  for (const alert of analysis.alerts) {
-    // Avoid duplicates from local checks
-    const isDuplicate = actions.some(
-      (a) => a.type === "alert" && (a.content as Record<string, unknown>).type === alert.type
+  } catch (error) {
+    console.error("Process audio error:", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Audio processing failed" },
+      { status: 500 }
     );
-    if (!isDuplicate) {
-      actions.push({
-        id: `action-${id++}`,
-        type: "alert",
-        timestamp,
-        severity: alert.severity,
-        content: {
-          type: alert.type,
-          description: alert.description,
-          action_taken: alert.action_taken,
-        },
-      });
-    }
   }
-
-  // Process referrals
-  for (const referral of analysis.referrals) {
-    actions.push({
-      id: `action-${id++}`,
-      type: "referral",
-      timestamp,
-      content: { department: referral.department, reason: referral.reason, urgency: referral.urgency },
-    });
-  }
-
-  return actions;
-}
-
-function runLocalChecks(
-  lines: TranscriptLine[],
-  patient: { allergies: string[]; current_medications: Array<{ name: string }> },
-  timestamp: number,
-  startId: number
-): ActionCard[] {
-  const actions: ActionCard[] = [];
-  let id = startId;
-  const text = lines.map((l) => l.text).join(" ").toLowerCase();
-
-  // Check for medication mentions
-  const commonDrugs = [
-    "ibuprofen", "lisinopril", "metformin", "omeprazole", "atorvastatin",
-    "bactrim", "amoxicillin", "aspirin", "warfarin", "acetaminophen",
-  ];
-
-  for (const drug of commonDrugs) {
-    if (text.includes(drug)) {
-      actions.push({
-        id: `action-${id++}`,
-        type: "medication",
-        timestamp,
-        content: { name: drug, dosage: "", context: "Mentioned in conversation" },
-      });
-
-      const currentMedNames = patient.current_medications.map((m) => m.name);
-      const interactions = checkDrugInteractions(drug, currentMedNames);
-      for (const interaction of interactions) {
-        actions.push({
-          id: `action-${id++}`,
-          type: "alert",
-          timestamp,
-          severity: interaction.severity,
-          content: {
-            type: "drug_interaction",
-            description: interaction.description,
-            action_taken: interaction.recommendation,
-          },
-        });
-      }
-
-      const allergyConflict = checkAllergyConflict(drug, patient.allergies);
-      if (allergyConflict) {
-        actions.push({
-          id: `action-${id++}`,
-          type: "alert",
-          timestamp,
-          severity: "high",
-          content: {
-            type: "allergy_conflict",
-            description: allergyConflict.description,
-            action_taken: "ALERT: Do not prescribe. Consider alternative.",
-          },
-        });
-      }
-    }
-  }
-
-  // Check for symptom keywords
-  const symptoms = ["dizzy", "dizziness", "pain", "swelling", "tightness", "pressure", "short of breath", "nausea", "tingling"];
-  for (const symptom of symptoms) {
-    if (text.includes(symptom)) {
-      actions.push({
-        id: `action-${id++}`,
-        type: "symptom",
-        timestamp,
-        content: { description: symptom, severity: "moderate", reported_by: "patient" },
-      });
-      break; // Only one symptom card per chunk
-    }
-  }
-
-  return actions;
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
