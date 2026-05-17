@@ -8,17 +8,17 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        display: ["'Instrument Serif'", "Georgia", "serif"],
-        body: ["'DM Sans'", "system-ui", "sans-serif"],
+        display: ["'Literata'", "Georgia", "serif"],
+        body: ["'Source Sans 3'", "system-ui", "sans-serif"],
       },
       animation: {
-        "fade-in": "fade-in-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+        "fade-in": "fade-in-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards",
         "slide-in": "slideIn 0.4s ease-out",
         breathe: "breathe 2s ease-in-out infinite",
       },
       keyframes: {
         "fade-in-up": {
-          "0%": { opacity: "0", transform: "translateY(8px)" },
+          "0%": { opacity: "0", transform: "translateY(6px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
         slideIn: {
@@ -26,7 +26,7 @@ const config: Config = {
           "100%": { opacity: "1", transform: "translateX(0)" },
         },
         breathe: {
-          "0%, 100%": { opacity: "0.4", transform: "scale(0.9)" },
+          "0%, 100%": { opacity: "0.5", transform: "scale(0.9)" },
           "50%": { opacity: "1", transform: "scale(1.1)" },
         },
       },

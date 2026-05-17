@@ -2,30 +2,28 @@
 
 export default function Header() {
   return (
-    <header className="relative border-b border-[var(--border-subtle)] bg-[var(--bg-primary)]/90 backdrop-blur-xl sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          {/* Logo mark */}
-          <div className="relative">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
-              <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
-              </svg>
-            </div>
-            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-[var(--bg-primary)]" />
+    <header className="border-b border-[var(--border-subtle)] bg-white sticky top-0 z-50">
+      <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          {/* Medical cross logo */}
+          <div className="w-10 h-10 rounded-lg bg-blue-700 flex items-center justify-center">
+            <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm-1 10h-4v4h-4v-4H6v-4h4V5h4v4h4v4z" opacity="0" />
+              <path d="M10 3v4H6v4h4v4h4v-4h4V7h-4V3h-4z" />
+            </svg>
           </div>
           <div>
-            <h1 className="text-2xl font-display text-white tracking-tight">Nura</h1>
-            <p className="text-[11px] font-medium text-[var(--text-muted)] uppercase tracking-[0.15em]">
-              Autonomous Clinical Agent
+            <h1 className="text-xl font-display font-bold text-[var(--text-primary)] tracking-tight">Nura</h1>
+            <p className="text-[11px] font-medium text-[var(--text-muted)] tracking-wide">
+              Clinical Documentation Agent
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-breathe" />
-            <span className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider">System Active</span>
+        <div className="flex items-center gap-4">
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-breathe" />
+            <span className="text-[11px] font-semibold text-emerald-700 tracking-wide">Active</span>
           </div>
         </div>
       </div>

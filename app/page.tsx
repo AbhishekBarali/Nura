@@ -1,750 +1,264 @@
-"use client";
+import Link from "next/link";
 
-import { useState, useEffect, useCallback } from "react";
-import Header from "@/components/Header";
-import PatientSelector from "@/components/PatientSelector";
-import AudioInput from "@/components/AudioInput";
-import LiveTranscript from "@/components/LiveTranscript";
-import AgentActions from "@/components/AgentActions";
-import CompleteReport from "@/components/CompleteReport";
-import LiveMic from "@/components/LiveMic";
-import AgentLog, { AgentLogEntry } from "@/components/AgentLog";
-import { Patient, TranscriptLine, ActionCard, CompleteReportData } from "@/lib/types";
-
-type AppMode = "instant" | "live" | "upload";
-
-export default function Home() {
-  const [mode, setMode] = useState<AppMode>("instant");
-  const [patients, setPatients] = useState<Patient[]>([]);
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [selectedDemo, setSelectedDemo] = useState<number | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [transcriptLines, setTranscriptLines] = useState<TranscriptLine[]>([]);
-  const [actions, setActions] = useState<ActionCard[]>([]);
-  const [summary, setSummary] = useState("");
-  const [report, setReport] = useState<CompleteReportData | null>(null);
-  const [showReport, setShowReport] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [isLiveActive, setIsLiveActive] = useState(false);
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [uploadStatus, setUploadStatus] = useState<string>("");
-
-  // For instant mode staggered animation
-  const [allTranscriptLines, setAllTranscriptLines] = useState<TranscriptLine[]>([]);
-  const [allActions, setAllActions] = useState<ActionCard[]>([]);
-  const [instantComplete, setInstantComplete] = useState(false);
-
-  // Agent autonomous actions log
-  const [agentLog, setAgentLog] = useState<AgentLogEntry[]>([]);
-  const [agentActive, setAgentActive] = useState(false);
-  const [liveRecordUpdates, setLiveRecordUpdates] = useState<string[]>([]);
-
-  // Fetch patients on mount
-  useEffect(() => {
-    fetch("/api/patients")
-      .then((res) => res.json())
-      .then((data) => setPatients(data))
-      .catch(console.error);
-  }, []);
-
-  // Staggered animation for instant/upload mode
-  useEffect(() => {
-    if (!isProcessing || (mode !== "instant" && mode !== "upload")) return;
-    if (allTranscriptLines.length === 0 && allActions.length === 0) return;
-
-    let transcriptIdx = 0;
-    const transcriptInterval = setInterval(() => {
-      if (transcriptIdx >= allTranscriptLines.length) {
-        clearInterval(transcriptInterval);
-        return;
-      }
-      const line = allTranscriptLines[transcriptIdx];
-      setTranscriptLines((tl) => [...tl, line]);
-      setCurrentTime(line.timestamp);
-      transcriptIdx++;
-    }, 120);
-
-    const actionTimeout = setTimeout(() => {
-      let actionIdx = 0;
-      const actionInterval = setInterval(() => {
-        if (actionIdx >= allActions.length) {
-          clearInterval(actionInterval);
-          setTimeout(() => {
-            setIsProcessing(false);
-            setInstantComplete(true);
-          }, 400);
-          return;
-        }
-        setActions((prev) => [...prev, allActions[actionIdx]]);
-        actionIdx++;
-      }, 200);
-    }, 600);
-
-    return () => {
-      clearInterval(transcriptInterval);
-      clearTimeout(actionTimeout);
-    };
-  }, [isProcessing, mode, allTranscriptLines, allActions]);
-
-  // Mock clinic schedule for appointment booking simulation
-  const getAppointmentResult = (department: string): string => {
-    const today = new Date();
-    const dayOfWeek = today.getDay();
-    // Simulate: next 2 days are "full", then find an open slot
-    const daysUntilOpen = dayOfWeek <= 3 ? 3 : 5; // Thu or Mon
-    const appointmentDate = new Date(today);
-    appointmentDate.setDate(today.getDate() + daysUntilOpen);
-    const dayName = appointmentDate.toLocaleDateString("en-US", { weekday: "long" });
-    const dateStr = appointmentDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    const times = ["9:00 AM", "10:30 AM", "2:00 PM", "3:30 PM"];
-    const slot = times[Math.floor(Math.random() * times.length)];
-    return `${department} — ${dayName} ${dateStr} at ${slot} (confirmed)`;
-  };
-
-  // Trigger autonomous agent actions after analysis completes
-  const triggerAgentAutonomousActions = useCallback((analysisActions: ActionCard[], patientName: string, soapNote: { subjective: string; assessment: string }) => {
-    setAgentActive(true);
-    setAgentLog([]);
-    setLiveRecordUpdates([]);
-
-    const hasAlerts = analysisActions.some(a => a.type === "alert");
-    const hasReferrals = analysisActions.some(a => a.type === "referral");
-    const conditions = analysisActions.filter(a => a.type === "condition");
-    const medications = analysisActions.filter(a => a.type === "medication");
-    const symptoms = analysisActions.filter(a => a.type === "symptom");
-    const referrals = analysisActions.filter(a => a.type === "referral");
-
-    // Build a deterministic timeline of agent steps
-    interface Step {
-      entry: Omit<AgentLogEntry, "id">;
-      startDelay: number;
-      doneDelay: number;
-      doneUpdate: Partial<AgentLogEntry>;
-      recordUpdate?: string;
-      recordUpdateDelay?: number;
-    }
-
-    const steps: Step[] = [];
-    let t = 300; // running timeline cursor
-
-    // Step 1: Update patient record
-    steps.push({
-      entry: { timestamp: Date.now(), action: "Updating Patient Record", icon: "📋", detail: `Adding ${conditions.length} condition(s), ${medications.length} medication(s) to chart`, status: "running", color: "text-cyan-400" },
-      startDelay: t,
-      doneDelay: t + 1200,
-      doneUpdate: { status: "done" },
-    });
-    // Live record updates
-    if (conditions.length > 0) {
-      const condNames = conditions.map(c => (c.content as Record<string, string>).name).filter(Boolean);
-      steps[0].recordUpdate = `+ Condition: ${condNames.join(", ") || "Detected"}`;
-      steps[0].recordUpdateDelay = t + 400;
-    }
-    t += 1400;
-
-    if (symptoms.length > 0) {
-      setTimeout(() => {
-        const symNames = symptoms.slice(0, 3).map(s => (s.content as Record<string, string>).description).filter(Boolean);
-        setLiveRecordUpdates(prev => [...prev, `+ Symptoms: ${symNames.join(", ") || "Reported"}`]);
-      }, t - 600);
-    }
-    if (medications.length > 0) {
-      setTimeout(() => {
-        const medNames = medications.map(m => (m.content as Record<string, string>).name).filter(Boolean);
-        setLiveRecordUpdates(prev => [...prev, `+ Medications: ${medNames.join(", ") || "Discussed"}`]);
-      }, t - 200);
-    }
-
-    // Step 2: Send SOAP report email
-    steps.push({
-      entry: { timestamp: Date.now(), action: "Sending SOAP Report", icon: "📧", detail: `Emailing encounter report to primary care team`, status: "running", color: "text-blue-400" },
-      startDelay: t,
-      doneDelay: t + 1300,
-      doneUpdate: { status: "sent", detail: `SOAP note sent to primarycare@clinic.org for ${patientName}` },
-    });
-    t += 1600;
-
-    // Step 3: Alert care team (if alerts)
-    if (hasAlerts) {
-      steps.push({
-        entry: { timestamp: Date.now(), action: "Alerting Care Team", icon: "🚨", detail: `Flagging clinical alerts for immediate review`, status: "running", color: "text-rose-400" },
-        startDelay: t,
-        doneDelay: t + 1200,
-        doneUpdate: { status: "sent", detail: "Alert notification sent to attending physician" },
-      });
-      t += 1500;
-    }
-
-    // Step 4: Dispatch referral (if referrals)
-    if (hasReferrals) {
-      const refDept = (referrals[0]?.content as Record<string, string>)?.department || "Specialist";
-      steps.push({
-        entry: { timestamp: Date.now(), action: "Dispatching Referral", icon: "🏥", detail: `Sending referral request to ${refDept}`, status: "running", color: "text-emerald-400" },
-        startDelay: t,
-        doneDelay: t + 1300,
-        doneUpdate: { status: "sent", detail: `Referral sent to ${refDept} — awaiting scheduling` },
-      });
-      t += 1600;
-    }
-
-    // Step 5: Schedule appointment (the new feature!)
-    steps.push({
-      entry: { timestamp: Date.now(), action: "Booking Appointment", icon: "📅", detail: `Checking clinic schedule for follow-up...`, status: "running", color: "text-amber-400" },
-      startDelay: t,
-      doneDelay: t + 2200,
-      doneUpdate: { status: "done", detail: "" }, // will be set dynamically
-    });
-    t += 2500;
-
-    // Step 6: Email to sub-department
-    const targetDept = hasReferrals
-      ? ((referrals[0]?.content as Record<string, string>)?.department || "Specialist Dept")
-      : "Primary Care";
-    steps.push({
-      entry: { timestamp: Date.now(), action: "Routing to Department", icon: "📨", detail: `Sending records to ${targetDept}`, status: "running", color: "text-violet-400" },
-      startDelay: t,
-      doneDelay: t + 1200,
-      doneUpdate: { status: "sent", detail: `Full report emailed to ${targetDept.toLowerCase().replace(/\s/g, "")}@clinic.org` },
-    });
-    t += 1500;
-
-    // Execute the timeline
-    const logEntries: AgentLogEntry[] = [];
-
-    steps.forEach((step, i) => {
-      // Add entry (running state)
-      setTimeout(() => {
-        logEntries.push({ ...step.entry, id: `agent-${i}` });
-        setAgentLog([...logEntries]);
-
-        // Handle record update
-        if (step.recordUpdate && step.recordUpdateDelay !== undefined) {
-          setTimeout(() => {
-            setLiveRecordUpdates(prev => [...prev, step.recordUpdate!]);
-          }, step.recordUpdateDelay - step.startDelay);
-        }
-      }, step.startDelay);
-
-      // Mark done
-      setTimeout(() => {
-        const entry = logEntries.find(e => e.id === `agent-${i}`);
-        if (entry) {
-          // Special handling for appointment booking — simulate schedule check
-          if (step.entry.action === "Booking Appointment") {
-            entry.status = "done";
-            entry.detail = getAppointmentResult(hasReferrals ? targetDept : "Follow-up");
-          } else {
-            Object.assign(entry, step.doneUpdate);
-          }
-          setAgentLog([...logEntries]);
-        }
-
-        // If last step, deactivate
-        if (i === steps.length - 1) {
-          setAgentActive(false);
-        }
-      }, step.doneDelay);
-    });
-  }, []);
-
-  // === INSTANT MODE ===
-  const startInstantProcessing = useCallback(async () => {
-    if (!selectedDemo) return;
-
-    // Auto-select matching patient if not selected
-    const patientId = selectedPatient?.id || selectedDemo;
-
-    setIsProcessing(true);
-    setTranscriptLines([]);
-    setActions([]);
-    setSummary("");
-    setReport(null);
-    setShowReport(false);
-    setCurrentTime(0);
-    setInstantComplete(false);
-    setAllTranscriptLines([]);
-    setAllActions([]);
-    setAgentLog([]);
-    setAgentActive(false);
-    setLiveRecordUpdates([]);
-
-    try {
-      const response = await fetch("/api/instant-analysis", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ patientId, demoId: selectedDemo }),
-      });
-
-      if (!response.ok) throw new Error("Analysis failed");
-      const data = await response.json();
-
-      // Auto-set patient from response if we used auto-match
-      if (!selectedPatient && data.patient) {
-        setSelectedPatient(data.patient);
-      }
-
-      setAllTranscriptLines(data.transcript);
-      setAllActions(data.actions);
-      setSummary(data.summary);
-      setDuration(data.duration);
-      setReport({
-        soap_note: data.soap_note,
-        actions: data.actions,
-        record_changes: [],
-        time_saved: data.time_saved,
-        total_actions: data.total_actions,
-      });
-      // Trigger autonomous agent actions for instant mode too
-      triggerAgentAutonomousActions(
-        data.actions,
-        data.patient?.name || selectedPatient?.name || "Patient",
-        data.soap_note || { subjective: "", assessment: "" }
-      );
-    } catch (error) {
-      console.error("Instant processing error:", error);
-      setIsProcessing(false);
-    }
-  }, [selectedPatient, selectedDemo, triggerAgentAutonomousActions]);
-
-  // === UPLOAD MODE ===
-  const handleAudioUpload = useCallback(async (file: File) => {
-    setUploadedFile(file);
-    setMode("upload");
-    setIsProcessing(true);
-    setTranscriptLines([]);
-    setActions([]);
-    setSummary("");
-    setReport(null);
-    setShowReport(false);
-    setCurrentTime(0);
-    setInstantComplete(false);
-    setAllTranscriptLines([]);
-    setAllActions([]);
-    setAgentLog([]);
-    setAgentActive(false);
-    setLiveRecordUpdates([]);
-    setUploadStatus("Uploading audio...");
-
-    try {
-      const formData = new FormData();
-      formData.append("audio", file);
-      if (selectedPatient) {
-        formData.append("patientId", String(selectedPatient.id));
-      }
-
-      const response = await fetch("/api/process-audio", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok && !response.headers.get("content-type")?.includes("text/event-stream")) {
-        const err = await response.json();
-        throw new Error(err.error || "Audio processing failed");
-      }
-
-      // Handle SSE stream
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("No response stream");
-
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const messages = buffer.split("\n\n");
-        buffer = messages.pop() || "";
-
-        for (const msg of messages) {
-          if (!msg.trim()) continue;
-          const eventMatch = msg.match(/^event: (.+)$/m);
-          const dataMatch = msg.match(/^data: (.+)$/m);
-          if (!eventMatch || !dataMatch) continue;
-
-          const event = eventMatch[1];
-          let data;
-          try { data = JSON.parse(dataMatch[1]); } catch { continue; }
-
-          switch (event) {
-            case "phase":
-              setUploadStatus(data.message);
-              if (data.duration) setDuration(data.duration);
-              break;
-            case "progress":
-              setUploadStatus(data.message);
-              break;
-            case "transcript_lines":
-              setTranscriptLines((prev) => [...prev, ...data.lines]);
-              if (data.lines.length > 0) {
-                setCurrentTime(data.lines[data.lines.length - 1].timestamp);
-              }
-              break;
-            case "actions_partial":
-              setActions(data.actions);
-              break;
-            case "actions":
-              setActions(data.actions);
-              break;
-            case "complete":
-              setUploadStatus("Analysis complete!");
-              if (data.patient && !selectedPatient) {
-                setSelectedPatient(data.patient);
-              }
-              setSummary(data.summary);
-              setDuration(data.duration || 60);
-              setActions(data.actions);
-              setReport({
-                soap_note: data.soap_note,
-                actions: data.actions,
-                record_changes: [],
-                time_saved: data.time_saved || "8 minutes",
-                total_actions: data.total_actions || data.actions.length,
-              });
-              setIsProcessing(false);
-              setInstantComplete(true);
-              // Trigger autonomous agent actions
-              triggerAgentAutonomousActions(
-                data.actions,
-                data.patient?.name || selectedPatient?.name || "Patient",
-                data.soap_note || { subjective: "", assessment: "" }
-              );
-              break;
-            case "error":
-              throw new Error(data.error);
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Upload processing error:", error);
-      setUploadStatus(`Error: ${error instanceof Error ? error.message : "Processing failed"}`);
-      setIsProcessing(false);
-    }
-  }, [selectedPatient, triggerAgentAutonomousActions]);
-
-  // === LIVE MODE handlers ===
-  const handleLiveTranscript = useCallback((line: TranscriptLine) => {
-    setTranscriptLines((prev) => [...prev, line]);
-    setCurrentTime(line.timestamp);
-  }, []);
-
-  const handleLiveAction = useCallback((action: ActionCard) => {
-    setActions((prev) => [...prev, action]);
-  }, []);
-
-  const handleLiveSummary = useCallback((text: string) => {
-    setSummary((prev) => (prev ? `${prev} ${text}` : text));
-  }, []);
-
-  const handleLiveComplete = useCallback((data: unknown) => {
-    setReport(data as CompleteReportData);
-  }, []);
-
-  const handleLiveToggle = useCallback(() => {
-    if (isLiveActive) {
-      setIsLiveActive(false);
-      setIsProcessing(false);
-    } else {
-      setIsLiveActive(true);
-      setIsProcessing(true);
-      setTranscriptLines([]);
-      setActions([]);
-      setSummary("");
-      setReport(null);
-      setShowReport(false);
-      setCurrentTime(0);
-      setDuration(300);
-    }
-  }, [isLiveActive]);
-
-  const switchMode = (newMode: AppMode) => {
-    setMode(newMode);
-    setIsProcessing(false);
-    setIsLiveActive(false);
-    setTranscriptLines([]);
-    setActions([]);
-    setSummary("");
-    setReport(null);
-    setShowReport(false);
-    setCurrentTime(0);
-    setDuration(0);
-    setInstantComplete(false);
-    setAllTranscriptLines([]);
-    setAllActions([]);
-    setUploadedFile(null);
-    setUploadStatus("");
-    setAgentLog([]);
-    setAgentActive(false);
-    setLiveRecordUpdates([]);
-  };
-
-  const isActive = isProcessing || isLiveActive;
-  const hasResults = transcriptLines.length > 0 || actions.length > 0;
-
+export default function LandingPage() {
   return (
-    <div className="min-h-screen flex flex-col app-wrapper">
-      <Header />
+    <div className="min-h-screen flex flex-col bg-[#f8fafc] overflow-hidden">
+      {/* Subtle ambient gradients */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+        <div className="absolute top-0 right-0 w-[800px] h-[800px] rounded-full bg-blue-100/40 blur-[120px] -translate-y-1/2 translate-x-1/3" />
+        <div className="absolute bottom-0 left-0 w-[600px] h-[600px] rounded-full bg-indigo-100/30 blur-[100px] translate-y-1/3 -translate-x-1/4" />
+        <div className="absolute top-1/2 left-1/2 w-[400px] h-[400px] rounded-full bg-emerald-50/40 blur-[80px] -translate-x-1/2 -translate-y-1/2" />
+      </div>
 
-      <main className="flex-1 w-full">
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-6">
-          {/* Split Panel Layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 min-h-[calc(100vh-140px)]">
-            
-            {/* LEFT PANEL — Controls */}
-            <div className="lg:col-span-4 space-y-4">
-              {/* Mode Switcher */}
-              <div className="elevated-card rounded-2xl p-4">
-                <div className="flex items-center gap-1 p-1 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl">
-                  <button
-                    onClick={() => switchMode("instant")}
-                    className={`flex-1 px-3 py-2.5 rounded-lg text-xs font-semibold transition-all duration-300 flex items-center justify-center gap-1.5 ${
-                      mode === "instant"
-                        ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/20"
-                        : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-                    }`}
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                    Instant Demo
-                  </button>
-                  <button
-                    onClick={() => switchMode("upload")}
-                    className={`flex-1 px-3 py-2.5 rounded-lg text-xs font-semibold transition-all duration-300 flex items-center justify-center gap-1.5 ${
-                      mode === "upload"
-                        ? "bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg shadow-purple-500/20"
-                        : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-                    }`}
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                    </svg>
-                    Upload
-                  </button>
-                  <button
-                    onClick={() => switchMode("live")}
-                    className={`flex-1 px-3 py-2.5 rounded-lg text-xs font-semibold transition-all duration-300 flex items-center justify-center gap-1.5 ${
-                      mode === "live"
-                        ? "bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/20"
-                        : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-                    }`}
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
-                    </svg>
-                    Live Mic
-                  </button>
-                </div>
-                <p className="text-[10px] text-[var(--text-muted)] text-center mt-2">
-                  {mode === "instant" && "Pre-recorded scenarios — full agent pipeline in seconds"}
-                  {mode === "upload" && "Upload any audio file — AI identifies speakers & analyzes"}
-                  {mode === "live" && "Real-time mic — speak and watch the agent respond"}
-                </p>
-              </div>
-
-              {/* Patient Selection */}
-              <PatientSelector
-                patients={patients}
-                selectedPatient={selectedPatient}
-                onSelect={setSelectedPatient}
-                disabled={isProcessing}
-              />
-
-              {/* Mode-specific input */}
-              {mode === "instant" && (
-                <AudioInput
-                  demos={[]}
-                  selectedDemo={selectedDemo}
-                  onSelectDemo={setSelectedDemo}
-                  onStart={startInstantProcessing}
-                  onFileUpload={handleAudioUpload}
-                  isProcessing={isProcessing}
-                  disabled={false}
-                />
-              )}
-
-              {mode === "upload" && (
-                <div className="elevated-card rounded-2xl p-5">
-                  <div className="flex items-center gap-2.5 mb-4">
-                    <div className="w-6 h-6 rounded-lg bg-purple-500/10 flex items-center justify-center">
-                      <svg className="w-3.5 h-3.5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                      </svg>
-                    </div>
-                    <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
-                      Upload Audio
-                    </label>
-                  </div>
-
-                  {uploadedFile ? (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-purple-500/8 border border-purple-500/15">
-                        <div className="w-8 h-8 rounded-lg bg-purple-500/15 flex items-center justify-center flex-shrink-0">
-                          <svg className="w-4 h-4 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
-                          </svg>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[12px] font-semibold text-purple-300 truncate">{uploadedFile.name}</p>
-                          <p className="text-[10px] text-[var(--text-muted)]">
-                            {(uploadedFile.size / 1024 / 1024).toFixed(1)} MB
-                          </p>
-                        </div>
-                      </div>
-                      {uploadStatus && (
-                        <div className={`text-[11px] font-medium px-3 py-2 rounded-lg ${
-                          uploadStatus.startsWith("Error") 
-                            ? "text-rose-400 bg-rose-500/8" 
-                            : "text-cyan-400 bg-cyan-500/8"
-                        }`}>
-                          {isProcessing && <span className="inline-block w-1.5 h-1.5 rounded-full bg-cyan-400 animate-breathe mr-2" />}
-                          {uploadStatus}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <label className="flex flex-col items-center justify-center h-40 border-2 border-dashed border-[var(--border-medium)] rounded-xl cursor-pointer hover:border-purple-500/40 hover:bg-purple-500/5 transition-all">
-                      <svg className="w-8 h-8 text-[var(--text-muted)] mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
-                      </svg>
-                      <p className="text-xs text-[var(--text-muted)]">Drop audio file or click to browse</p>
-                      <p className="text-[10px] text-[var(--text-muted)]/60 mt-1">WAV, MP3, M4A, OGG, WebM</p>
-                      <input
-                        type="file"
-                        accept="audio/*,.wav,.mp3,.m4a,.ogg,.webm"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) handleAudioUpload(file);
-                        }}
-                      />
-                    </label>
-                  )}
-
-                  <div className="mt-4 p-3 rounded-xl bg-[var(--bg-primary)] border border-[var(--border-subtle)]">
-                    <p className="text-[10px] text-[var(--text-muted)] leading-relaxed">
-                      <span className="text-cyan-400 font-semibold">AI-powered:</span> Automatically identifies Doctor vs Patient speakers, 
-                      detects clinical scenarios, drug interactions, and generates SOAP notes — no manual setup needed.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {mode === "live" && (
-                <LiveMic
-                  patientId={selectedPatient?.id || null}
-                  onTranscriptLine={handleLiveTranscript}
-                  onAction={handleLiveAction}
-                  onSummary={handleLiveSummary}
-                  onComplete={handleLiveComplete}
-                  isActive={isLiveActive}
-                  onToggle={handleLiveToggle}
-                />
-              )}
-
-              {/* Report Button */}
-              {report && !isProcessing && (mode === "instant" || mode === "upload" ? instantComplete : !isLiveActive) && (
-                <button
-                  onClick={() => setShowReport(true)}
-                  className="w-full group px-5 py-4 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 hover:from-cyan-500/20 hover:to-blue-500/20 border border-cyan-500/20 hover:border-cyan-500/40 text-white font-semibold rounded-2xl transition-all duration-300 shadow-lg shadow-cyan-500/5 hover:shadow-cyan-500/15 animate-fade-in flex items-center gap-3"
-                >
-                  <span className="w-8 h-8 rounded-xl bg-cyan-500/15 flex items-center justify-center group-hover:bg-cyan-500/25 transition-colors">
-                    📋
-                  </span>
-                  <span className="text-left flex-1">
-                    <span className="block text-sm">View Complete Report</span>
-                    <span className="block text-[10px] text-[var(--text-muted)] font-normal">SOAP note, actions, time saved</span>
-                  </span>
-                </button>
-              )}
-
-              {/* Live Record Updates */}
-              {liveRecordUpdates.length > 0 && (
-                <div className="elevated-card rounded-2xl overflow-hidden animate-fade-in">
-                  <div className="px-4 py-2.5 border-b border-[var(--border-subtle)] flex items-center gap-2">
-                    <div className="w-5 h-5 rounded-md bg-emerald-500/10 flex items-center justify-center">
-                      <svg className="w-3 h-3 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                      </svg>
-                    </div>
-                    <h3 className="text-[10px] font-bold text-[var(--text-primary)] uppercase tracking-wider">Record Updated</h3>
-                  </div>
-                  <div className="px-4 py-2 space-y-1">
-                    {liveRecordUpdates.map((update, i) => (
-                      <div key={i} className="flex items-center gap-2 py-0.5 animate-fade-in">
-                        <span className="w-1 h-1 rounded-full bg-emerald-400 flex-shrink-0" />
-                        <span className="text-[11px] text-emerald-300/90 font-medium">{update}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Agent Decision Log */}
-              <AgentLog entries={agentLog} isActive={agentActive} />
+      {/* Navigation */}
+      <nav className="relative z-10 w-full border-b border-slate-200/60 bg-white/70 backdrop-blur-md">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-blue-700 flex items-center justify-center">
+              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
             </div>
+            <span className="text-xl font-display font-bold text-slate-900 tracking-tight">Nura</span>
+          </div>
+          <Link
+            href="/demo"
+            className="px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold rounded-lg transition-colors duration-200 shadow-sm"
+          >
+            Try Live Demo
+          </Link>
+        </div>
+      </nav>
 
-            {/* RIGHT PANEL — Live Results */}
-            <div className="lg:col-span-8 space-y-4">
-              {!hasResults && !isActive ? (
-                <div className="elevated-card rounded-2xl h-full flex flex-col items-center justify-center p-12 text-center min-h-[500px]">
-                  <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-cyan-500/10 flex items-center justify-center mb-6">
-                    <svg className="w-9 h-9 text-cyan-400/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-2">Ready to Analyze</h3>
-                  <p className="text-sm text-[var(--text-muted)] max-w-md leading-relaxed">
-                    {mode === "instant" && "Select a clinical scenario on the left and click Analyze to see the agent pipeline in action."}
-                    {mode === "upload" && "Upload an audio recording of a clinical encounter. The AI will transcribe, identify speakers, and analyze automatically."}
-                    {mode === "live" && "Click the microphone to start recording. Speak or play audio near your mic — the agent analyzes in real-time."}
-                  </p>
-                  <div className="flex items-center gap-4 mt-6 text-[10px] text-[var(--text-muted)]">
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-cyan-400/40" />
-                      Speaker ID
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-rose-400/40" />
-                      Drug Alerts
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400/40" />
-                      SOAP Notes
-                    </span>
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 h-[calc(100vh-160px)]">
-                  <div className="xl:col-span-5 min-h-0">
-                    <LiveTranscript lines={transcriptLines} isProcessing={isActive} />
-                  </div>
-                  <div className="xl:col-span-7 min-h-0">
-                    <AgentActions actions={actions} summary={summary} isProcessing={isActive} />
-                  </div>
-                </div>
-              )}
+      {/* Hero Section */}
+      <section className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 pt-20 pb-16">
+        <div className="max-w-4xl mx-auto text-center">
+          {/* Badge */}
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-50 border border-blue-200 mb-8">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-xs font-semibold text-blue-800">AI Agent Olympics — Autonomous Clinical Intelligence</span>
+          </div>
+
+          {/* Headline */}
+          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-display font-bold text-slate-900 leading-[1.08] tracking-tight mb-6">
+            The Doctor Speaks.
+            <br />
+            <span className="text-blue-700">Nura Does Everything Else.</span>
+          </h1>
+
+          {/* Subheadline */}
+          <p className="text-lg sm:text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed mb-10">
+            An autonomous clinical voice agent that listens to doctor-patient conversations and independently detects drug interactions, flags allergy conflicts, routes referrals, and generates structured SOAP notes — in real-time.
+          </p>
+
+          {/* CTA Buttons */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
+            <Link
+              href="/demo"
+              className="group px-8 py-4 bg-blue-700 hover:bg-blue-800 text-white text-base font-semibold rounded-xl transition-all duration-200 shadow-lg shadow-blue-700/20 hover:shadow-xl hover:shadow-blue-700/30 flex items-center gap-3"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
+              </svg>
+              Watch Live Demo
+              <svg className="w-4 h-4 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+              </svg>
+            </Link>
+            <a
+              href="#how-it-works"
+              className="px-8 py-4 bg-white hover:bg-slate-50 text-slate-700 text-base font-semibold rounded-xl border border-slate-200 hover:border-slate-300 transition-all duration-200"
+            >
+              How It Works
+            </a>
+          </div>
+
+          {/* Stats Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-2xl mx-auto">
+            <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm">
+              <p className="text-3xl font-display font-bold text-blue-700">49%</p>
+              <p className="text-sm text-slate-500 mt-1">of physician workday spent on documentation</p>
+            </div>
+            <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm">
+              <p className="text-3xl font-display font-bold text-red-600">62%</p>
+              <p className="text-sm text-slate-500 mt-1">of physicians report burnout from charting</p>
+            </div>
+            <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm">
+              <p className="text-3xl font-display font-bold text-emerald-600">$4.6B</p>
+              <p className="text-sm text-slate-500 mt-1">annual cost of physician turnover from burnout</p>
             </div>
           </div>
         </div>
-      </main>
+      </section>
 
-      {/* Report Modal */}
-      {showReport && (
-        <CompleteReport report={report} onClose={() => setShowReport(false)} />
-      )}
+      {/* The Gap / How It Works Section */}
+      <section id="how-it-works" className="relative z-10 py-20 bg-white border-t border-slate-200">
+        <div className="max-w-5xl mx-auto px-6">
+          <div className="text-center mb-14">
+            <h2 className="text-3xl sm:text-4xl font-display font-bold text-slate-900 mb-4">Beyond AI Scribes</h2>
+            <p className="text-lg text-slate-500 max-w-xl mx-auto">Current tools only do one thing. Nura does everything — autonomously.</p>
+          </div>
+
+          {/* Comparison Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
+            <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200">
+              <div className="w-10 h-10 rounded-xl bg-slate-200 flex items-center justify-center mb-4">
+                <svg className="w-5 h-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                </svg>
+              </div>
+              <h3 className="text-base font-bold text-slate-700 mb-1">AI Scribes</h3>
+              <p className="text-sm text-slate-500 mb-3">Abridge, DAX, Nabla</p>
+              <div className="text-sm text-slate-600 font-mono bg-white px-3 py-2 rounded-lg border border-slate-200">
+                Voice → Notes <span className="text-slate-400">only</span>
+              </div>
+            </div>
+
+            <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200">
+              <div className="w-10 h-10 rounded-xl bg-slate-200 flex items-center justify-center mb-4">
+                <svg className="w-5 h-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                </svg>
+              </div>
+              <h3 className="text-base font-bold text-slate-700 mb-1">CDSS Tools</h3>
+              <p className="text-sm text-slate-500 mb-3">Epic alerts, Lexicomp</p>
+              <div className="text-sm text-slate-600 font-mono bg-white px-3 py-2 rounded-lg border border-slate-200">
+                Manual Input → Alerts <span className="text-slate-400">only</span>
+              </div>
+            </div>
+
+            <div className="p-6 rounded-2xl bg-blue-50 border-2 border-blue-200 relative">
+              <div className="absolute -top-3 right-4 px-2.5 py-0.5 bg-blue-700 text-white text-[10px] font-bold uppercase tracking-wider rounded-full">Nura</div>
+              <div className="w-10 h-10 rounded-xl bg-blue-700 flex items-center justify-center mb-4">
+                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                </svg>
+              </div>
+              <h3 className="text-base font-bold text-blue-900 mb-1">Autonomous Agent</h3>
+              <p className="text-sm text-blue-600 mb-3">Nura — one button</p>
+              <div className="text-sm text-blue-800 font-mono bg-white px-3 py-2 rounded-lg border border-blue-200 font-semibold">
+                Voice → Notes + Decisions + Actions
+              </div>
+            </div>
+          </div>
+
+          {/* Pipeline Steps */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            {[
+              { icon: "🎙️", title: "Listen", desc: "Real-time transcription with speaker diarization" },
+              { icon: "🧠", title: "Understand", desc: "Extract medications, symptoms, conditions" },
+              { icon: "⚡", title: "Cross-Reference", desc: "Check drug interactions & allergy conflicts" },
+              { icon: "🚨", title: "Decide", desc: "Flag urgency, route referrals autonomously" },
+              { icon: "📋", title: "Document", desc: "Generate SOAP notes & update patient record" },
+            ].map((step, i) => (
+              <div key={i} className="relative p-4 rounded-xl bg-slate-50 border border-slate-200 text-center group hover:bg-blue-50 hover:border-blue-200 transition-colors duration-200">
+                <div className="text-2xl mb-2">{step.icon}</div>
+                <h4 className="text-sm font-bold text-slate-800 mb-1">{step.title}</h4>
+                <p className="text-xs text-slate-500 leading-relaxed">{step.desc}</p>
+                {i < 4 && (
+                  <div className="hidden lg:block absolute top-1/2 -right-3 w-5 text-slate-300 -translate-y-1/2 z-10">
+                    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                    </svg>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* What Nura Detects */}
+      <section className="relative z-10 py-20 border-t border-slate-200 bg-[#f8fafc]">
+        <div className="max-w-5xl mx-auto px-6">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl sm:text-4xl font-display font-bold text-slate-900 mb-4">Autonomous Clinical Intelligence</h2>
+            <p className="text-lg text-slate-500">Press play. The agent handles the rest.</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {[
+              { icon: "⚠️", title: "Drug Interactions", desc: "Detects dangerous combinations between current medications and newly mentioned drugs" },
+              { icon: "🛡️", title: "Allergy Conflicts", desc: "Cross-references patient allergies against prescribed medications in real-time" },
+              { icon: "🏥", title: "Diagnosis Tracking", desc: "Identifies and classifies conditions as new, existing, or suspected" },
+              { icon: "📨", title: "Referral Routing", desc: "Autonomously decides which specialist is needed and dispatches the referral" },
+              { icon: "📋", title: "SOAP Generation", desc: "Complete clinical notes generated instantly — Subjective, Objective, Assessment, Plan" },
+              { icon: "📅", title: "Appointment Booking", desc: "Schedules follow-ups and specialist visits automatically after analysis" },
+            ].map((item, i) => (
+              <div key={i} className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-shadow duration-200">
+                <div className="text-2xl mb-3">{item.icon}</div>
+                <h4 className="text-sm font-bold text-slate-800 mb-1.5">{item.title}</h4>
+                <p className="text-xs text-slate-500 leading-relaxed">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Tech Stack */}
+      <section className="relative z-10 py-14 bg-white border-t border-slate-200">
+        <div className="max-w-4xl mx-auto px-6 text-center">
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-6">Powered By</p>
+          <div className="flex flex-wrap items-center justify-center gap-8 text-sm font-semibold text-slate-500">
+            <span className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
+              Speechmatics
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-indigo-600" />
+              Featherless AI
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-600" />
+              Next.js 14
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+              SQLite
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
+              Vultr
+            </span>
+          </div>
+        </div>
+      </section>
+
+      {/* Final CTA */}
+      <section className="relative z-10 py-20 bg-slate-900 text-white">
+        <div className="max-w-3xl mx-auto px-6 text-center">
+          <h2 className="text-3xl sm:text-4xl font-display font-bold mb-4">See It In Action</h2>
+          <p className="text-lg text-slate-400 mb-8 max-w-xl mx-auto">
+            Watch Nura process a doctor-patient conversation in real-time — detecting conflicts, flagging alerts, and generating notes autonomously.
+          </p>
+          <Link
+            href="/demo"
+            className="inline-flex items-center gap-3 px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white text-base font-semibold rounded-xl transition-colors duration-200 shadow-lg shadow-blue-600/30"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
+            </svg>
+            Launch Live Demo
+          </Link>
+          <p className="text-xs text-slate-500 mt-4">No login required. Three demo scenarios included.</p>
+        </div>
+      </section>
 
       {/* Footer */}
-      <footer className="border-t border-[var(--border-subtle)] py-4 text-center">
-        <p className="text-[11px] text-[var(--text-muted)] tracking-wide">
-          <span className="font-display text-sm text-[var(--text-secondary)]">Nura</span>
-          <span className="mx-2 text-[var(--border-medium)]">·</span>
-          Autonomous Clinical Voice Agent
-          <span className="mx-2 text-[var(--border-medium)]">·</span>
-          AI Agent Olympics
-        </p>
+      <footer className="relative z-10 border-t border-slate-800 bg-slate-900 py-6">
+        <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded bg-blue-700 flex items-center justify-center">
+              <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+            </div>
+            <span className="text-sm font-display font-bold text-white">Nura</span>
+          </div>
+          <p className="text-xs text-slate-500">
+            Autonomous Clinical Voice Agent — AI Agent Olympics 2025
+          </p>
+        </div>
       </footer>
     </div>
   );

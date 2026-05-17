@@ -152,34 +152,32 @@ export default function LiveMic({
   };
 
   return (
-    <div className="elevated-card rounded-2xl p-5">
+    <div className="elevated-card rounded-xl p-5">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2.5">
-          <div className="w-6 h-6 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-            <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
-            </svg>
-          </div>
+          <svg className="w-4 h-4 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+          </svg>
           <div>
             <h3 className="text-sm font-semibold text-[var(--text-primary)]">Live Microphone</h3>
-            <p className="text-[11px] text-[var(--text-muted)]">Speak or play audio near your mic</p>
+            <p className="text-xs text-[var(--text-muted)]">Speak or play audio near your mic</p>
           </div>
         </div>
         {isListening && (
-          <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-rose-500/10 border border-rose-500/20">
-            <span className="w-2 h-2 rounded-full bg-rose-500 recording-pulse" />
-            <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider">Recording</span>
+          <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-red-50 border border-red-200">
+            <span className="w-2 h-2 rounded-full bg-red-500 recording-pulse" />
+            <span className="text-[10px] font-bold text-red-700 uppercase tracking-wide">Recording</span>
           </div>
         )}
       </div>
 
       {/* Mic level visualizer */}
       {isListening && (
-        <div className="mb-4 h-12 bg-[var(--bg-primary)] rounded-xl border border-[var(--border-subtle)] flex items-center px-3 gap-[2px] overflow-hidden">
+        <div className="mb-4 h-12 bg-slate-50 rounded-lg border border-[var(--border-subtle)] flex items-center px-3 gap-[2px] overflow-hidden">
           {Array.from({ length: 40 }).map((_, i) => (
             <div
               key={i}
-              className="flex-1 rounded-full bg-emerald-400 transition-all duration-75"
+              className="flex-1 rounded-full bg-blue-500 transition-all duration-75"
               style={{
                 height: `${Math.max(10, micLevel * 100 * (0.4 + Math.random() * 0.6))}%`,
                 opacity: i / 40 < micLevel + 0.3 ? 0.8 : 0.15,
@@ -190,7 +188,7 @@ export default function LiveMic({
       )}
 
       {error && (
-        <div className="mb-4 p-3 rounded-xl bg-rose-500/8 border border-rose-500/15 text-[12px] text-rose-400">
+        <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
           {error}
         </div>
       )}
@@ -198,10 +196,10 @@ export default function LiveMic({
       <button
         onClick={handleToggle}
         disabled={!patientId}
-        className={`w-full py-3.5 px-6 rounded-xl font-semibold text-sm transition-all duration-300 flex items-center justify-center gap-2.5 ${
+        className={`w-full py-3 px-6 rounded-lg font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2.5 ${
           isListening
-            ? "bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-500/20"
-            : "bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white shadow-lg shadow-emerald-500/20 disabled:from-slate-700 disabled:to-slate-700 disabled:text-slate-400 disabled:shadow-none disabled:cursor-not-allowed"
+            ? "bg-red-600 hover:bg-red-700 text-white"
+            : "bg-blue-700 hover:bg-blue-800 text-white disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
         }`}
       >
         {isListening ? (
@@ -222,7 +220,7 @@ export default function LiveMic({
       </button>
 
       {!patientId && (
-        <p className="text-[11px] text-[var(--text-muted)] text-center mt-3">Select a patient first to enable live analysis</p>
+        <p className="text-xs text-[var(--text-muted)] text-center mt-3">Select a patient first to enable live analysis</p>
       )}
     </div>
   );

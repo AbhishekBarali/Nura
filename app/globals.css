@@ -1,29 +1,31 @@
-@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Literata:opsz,wght@7..72,400;7..72,500;7..72,600;7..72,700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --bg-primary: #0c1220;
-  --bg-secondary: #111827;
-  --bg-elevated: #1a2332;
-  --bg-surface: #1e293b;
-  --border-subtle: rgba(148, 163, 184, 0.08);
-  --border-medium: rgba(148, 163, 184, 0.15);
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-elevated: #ffffff;
+  --bg-surface: #f1f5f9;
+  --border-subtle: #e2e8f0;
+  --border-medium: #cbd5e1;
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
   --text-muted: #64748b;
-  --accent-primary: #22d3ee;
-  --accent-secondary: #06b6d4;
-  --accent-glow: rgba(34, 211, 238, 0.15);
-  --alert-red: #f43f5e;
-  --alert-red-glow: rgba(244, 63, 94, 0.12);
-  --alert-amber: #f59e0b;
-  --alert-green: #10b981;
-  --alert-purple: #a78bfa;
-  --font-display: 'Instrument Serif', Georgia, serif;
-  --font-body: 'DM Sans', system-ui, sans-serif;
+  --accent-primary: #1d4ed8;
+  --accent-secondary: #2563eb;
+  --accent-light: #eff6ff;
+  --alert-red: #dc2626;
+  --alert-red-bg: #fef2f2;
+  --alert-amber: #d97706;
+  --alert-amber-bg: #fffbeb;
+  --alert-green: #059669;
+  --alert-green-bg: #ecfdf5;
+  --alert-purple: #7c3aed;
+  --font-display: 'Literata', Georgia, serif;
+  --font-body: 'Source Sans 3', system-ui, sans-serif;
 }
 
 * {
@@ -36,29 +38,6 @@ body {
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
-
-/* Background texture — subtle noise grain */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.015'/%3E%3C/svg%3E");
-  pointer-events: none;
-  z-index: 0;
-}
-
-/* Ambient gradient orbs */
-body::after {
-  content: '';
-  position: fixed;
-  top: -20%;
-  right: -10%;
-  width: 600px;
-  height: 600px;
-  background: radial-gradient(circle, rgba(34, 211, 238, 0.04) 0%, transparent 70%);
-  pointer-events: none;
-  z-index: 0;
 }
 
 #__next, main, .app-wrapper {
@@ -77,7 +56,7 @@ body::after {
 
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: rgba(148, 163, 184, 0.15) transparent;
+    scrollbar-color: #cbd5e1 transparent;
   }
 
   .scrollbar-thin::-webkit-scrollbar {
@@ -89,25 +68,18 @@ body::after {
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: rgba(148, 163, 184, 0.15);
+    background-color: #cbd5e1;
     border-radius: 10px;
-  }
-
-  .text-gradient {
-    background: linear-gradient(135deg, var(--accent-primary), #818cf8);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
   }
 }
 
 /* Recording pulse */
 @keyframes recording-pulse {
   0%, 100% {
-    box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.5);
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4);
   }
   50% {
-    box-shadow: 0 0 0 12px rgba(244, 63, 94, 0);
+    box-shadow: 0 0 0 10px rgba(220, 38, 38, 0);
   }
 }
 
@@ -119,22 +91,6 @@ body::after {
 @keyframes card-enter {
   0% {
     opacity: 0;
-    transform: translateY(12px) scale(0.97);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.card-enter {
-  animation: card-enter 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-/* Fade in up */
-@keyframes fade-in-up {
-  0% {
-    opacity: 0;
     transform: translateY(8px);
   }
   100% {
@@ -143,8 +99,24 @@ body::after {
   }
 }
 
+.card-enter {
+  animation: card-enter 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Fade in up */
+@keyframes fade-in-up {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .animate-fade-in {
-  animation: fade-in-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: fade-in-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 /* Shimmer for loading states */
@@ -158,28 +130,14 @@ body::after {
 }
 
 .shimmer {
-  background: linear-gradient(90deg, transparent 25%, rgba(34, 211, 238, 0.05) 50%, transparent 75%);
+  background: linear-gradient(90deg, transparent 25%, rgba(29, 78, 216, 0.04) 50%, transparent 75%);
   background-size: 200% 100%;
   animation: shimmer 2s ease-in-out infinite;
 }
 
-/* Progress glow */
-@keyframes progress-glow {
-  0%, 100% {
-    box-shadow: 0 0 6px rgba(34, 211, 238, 0.3), 0 0 2px rgba(34, 211, 238, 0.5);
-  }
-  50% {
-    box-shadow: 0 0 16px rgba(34, 211, 238, 0.5), 0 0 4px rgba(34, 211, 238, 0.8);
-  }
-}
-
-.progress-glow {
-  animation: progress-glow 2s ease-in-out infinite;
-}
-
 /* Breathing dot */
 @keyframes breathe {
-  0%, 100% { opacity: 0.4; transform: scale(0.9); }
+  0%, 100% { opacity: 0.5; transform: scale(0.9); }
   50% { opacity: 1; transform: scale(1.1); }
 }
 
@@ -187,42 +145,14 @@ body::after {
   animation: breathe 2s ease-in-out infinite;
 }
 
-/* Glass morphism card */
-.glass-card {
-  background: rgba(30, 41, 59, 0.5);
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--border-subtle);
-}
-
-/* Elevated card with glow on hover */
+/* Elevated card — clean white card with subtle shadow */
 .elevated-card {
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  transition: all 0.2s ease;
 }
 
 .elevated-card:hover {
-  border-color: var(--border-medium);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2), 0 0 0 1px var(--border-medium);
-}
-
-/* Alert card glow effects */
-.alert-glow-red {
-  box-shadow: inset 0 0 0 1px rgba(244, 63, 94, 0.2), 0 0 20px rgba(244, 63, 94, 0.05);
-}
-
-.alert-glow-amber {
-  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.2), 0 0 20px rgba(245, 158, 11, 0.05);
-}
-
-.alert-glow-green {
-  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.2), 0 0 20px rgba(16, 185, 129, 0.05);
-}
-
-.alert-glow-cyan {
-  box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.2), 0 0 20px rgba(34, 211, 238, 0.05);
-}
-
-.alert-glow-purple {
-  box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.2), 0 0 20px rgba(167, 139, 250, 0.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
 }
