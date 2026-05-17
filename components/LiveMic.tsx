@@ -13,6 +13,21 @@ interface LiveMicProps {
   onToggle: () => void;
 }
 
+// Simulation transcript for fallback
+const SIMULATION_TRANSCRIPT: TranscriptLine[] = [
+  { speaker: "Doctor", text: "Good morning Mrs. Chen. How are you feeling today?", timestamp: 1.2 },
+  { speaker: "Patient", text: "Not great doctor. The new blood pressure medication is making me dizzy, especially when I stand up.", timestamp: 4.5 },
+  { speaker: "Doctor", text: "That's the lisinopril we started last week. Any other issues?", timestamp: 8.1 },
+  { speaker: "Patient", text: "Yes, my feet have been swelling too. And I've been taking ibuprofen every day for my back pain.", timestamp: 12.3 },
+  { speaker: "Doctor", text: "How long have you been taking the ibuprofen?", timestamp: 16.0 },
+  { speaker: "Patient", text: "About three weeks now. My neighbor recommended it for the back pain.", timestamp: 19.2 },
+  { speaker: "Doctor", text: "I see. And remind me, do you have any allergies to medications?", timestamp: 22.8 },
+  { speaker: "Patient", text: "Yes, penicillin. I had a bad rash years ago when I took it.", timestamp: 26.1 },
+  { speaker: "Doctor", text: "Okay, that's important. Let me check your current medications against that.", timestamp: 29.5 },
+  { speaker: "Patient", text: "I'm also still taking the metformin for my diabetes, twice a day.", timestamp: 33.0 },
+  { speaker: "Doctor", text: "Right. I want to review the ibuprofen situation because it can interact with your lisinopril.", timestamp: 36.8 },
+];
+
 export default function LiveMic({
   patientId,
   onTranscriptLine,
@@ -25,7 +40,9 @@ export default function LiveMic({
   const [micLevel, setMicLevel] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [interimText, setInterimText] = useState("");
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<string>("");
+  const [simulationActive, setSimulationActive] = useState(false);
+
   const analyzerRef = useRef<AnalyserNode | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -33,11 +50,21 @@ export default function LiveMic({
   const transcriptBufferRef = useRef<string>("");
   const lineCountRef = useRef(0);
   const startTimeRef = useRef(0);
-  const shouldListenRef = useRef(false);
   const analysisTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const processedResultsRef = useRef(0);
+  const simulationTimerRef = useRef<NodeJS.Timeout[]>([]);
 
-  // Keep callback refs fresh to avoid stale closures
+  // Speechmatics WebSocket
+  const wsRef = useRef<WebSocket | null>(null);
+  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const lastSpeakerLabelRef = useRef<string>("S1");
+
+  // Sentence buffering - accumulate words until we have a complete thought
+  const sentenceBufferRef = useRef<string>("");
+  const sentenceSpeakerRef = useRef<string>("S1");
+  const sentenceStartTimeRef = useRef<number>(0);
+  const flushTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Keep callback refs fresh
   const onTranscriptLineRef = useRef(onTranscriptLine);
   const onActionRef = useRef(onAction);
   const onSummaryRef = useRef(onSummary);
@@ -56,14 +83,11 @@ export default function LiveMic({
       const response = await fetch("/api/analyze-chunk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ patientId: patientId || 0, transcript, timestamp }),
+        body: JSON.stringify({ patientId: patientId || 1, transcript, timestamp }),
       });
-      if (!response.ok) {
-        console.error("Analysis API error:", response.status);
-        return;
-      }
+      if (!response.ok) return;
       const data = await response.json();
-      if (data.actions && data.actions.length > 0) {
+      if (data.actions?.length > 0) {
         for (const action of data.actions) { onActionRef.current(action); }
       }
       if (data.summary) { onSummaryRef.current(data.summary); }
@@ -78,11 +102,9 @@ export default function LiveMic({
         transcriptBufferRef.current = "";
         triggerAnalysis(buffer, timestamp);
       }
-    }, 2000);
+    }, 2500);
 
-    // Force send if buffer has enough content
-    const bufferLen = transcriptBufferRef.current.trim().length;
-    if (bufferLen > 100) {
+    if (transcriptBufferRef.current.trim().length > 120) {
       if (analysisTimerRef.current) clearTimeout(analysisTimerRef.current);
       const buffer = transcriptBufferRef.current;
       transcriptBufferRef.current = "";
@@ -90,22 +112,109 @@ export default function LiveMic({
     }
   }, [triggerAnalysis]);
 
+  // Convert speaker label (S1, S2) to Doctor/Patient
+  const mapSpeaker = (label: string): string => {
+    return label === "S1" ? "Doctor" : "Patient";
+  };
+
+  // Flush the sentence buffer as a complete transcript line
+  const flushSentenceBuffer = useCallback(() => {
+    if (flushTimerRef.current) { clearTimeout(flushTimerRef.current); flushTimerRef.current = null; }
+    const text = sentenceBufferRef.current.trim();
+    if (!text) return;
+
+    const timestamp = (Date.now() - startTimeRef.current) / 1000;
+    const speaker = mapSpeaker(sentenceSpeakerRef.current);
+    lineCountRef.current++;
+
+    onTranscriptLineRef.current({ speaker, text, timestamp });
+    transcriptBufferRef.current += `${speaker}: ${text}\n`;
+    sentenceBufferRef.current = "";
+    scheduleAnalysis(timestamp);
+  }, [scheduleAnalysis]);
+
+  // Schedule a flush after a pause (speaker stopped talking)
+  const scheduleFlush = useCallback(() => {
+    if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+    flushTimerRef.current = setTimeout(() => {
+      flushSentenceBuffer();
+    }, 1500); // 1.5s of silence = end of utterance
+  }, [flushSentenceBuffer]);
+
+  // Start the simulation fallback
+  const startSimulation = useCallback(() => {
+    setSimulationActive(true);
+    setInterimText("");
+    setConnectionStatus("Simulation mode — Speechmatics pipeline demo");
+
+    let buffer = "";
+    const timers: NodeJS.Timeout[] = [];
+    const simPatientId = patientId || 1;
+
+    SIMULATION_TRANSCRIPT.forEach((line, index) => {
+      const interimDelay = line.timestamp * 1000 - 800;
+      if (interimDelay > 0) {
+        const t1 = setTimeout(() => {
+          setInterimText(line.text.substring(0, Math.floor(line.text.length * 0.6)) + "...");
+        }, interimDelay);
+        timers.push(t1);
+      }
+
+      const t2 = setTimeout(() => {
+        setInterimText("");
+        onTranscriptLineRef.current(line);
+        buffer += `${line.speaker}: ${line.text}\n`;
+
+        if ((index + 1) % 3 === 0 || index === SIMULATION_TRANSCRIPT.length - 1) {
+          const chunk = buffer;
+          buffer = "";
+          fetch("/api/analyze-chunk", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ patientId: simPatientId, transcript: chunk, timestamp: line.timestamp }),
+          })
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+              if (data?.actions) { for (const action of data.actions) { onActionRef.current(action); } }
+              if (data?.summary) { onSummaryRef.current(data.summary); }
+            })
+            .catch(() => {});
+        }
+      }, line.timestamp * 1000);
+      timers.push(t2);
+    });
+
+    simulationTimerRef.current = timers;
+  }, [patientId]);
+
+  // ===== SPEECHMATICS REAL-TIME CONNECTION =====
   const startListening = useCallback(async () => {
     setError(null);
     setInterimText("");
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setError("Speech recognition not supported in this browser. Please use Google Chrome.");
-      return;
-    }
+    setConnectionStatus("Connecting to Speechmatics...");
+    setSimulationActive(false);
+    lineCountRef.current = 0;
+    transcriptBufferRef.current = "";
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // 1. Get microphone access
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          sampleRate: 16000,
+          echoCancellation: false, // Disable so we pick up played audio clearly
+          noiseSuppression: false,
+          autoGainControl: true,
+        },
+      });
       streamRef.current = stream;
 
-      const audioContext = new AudioContext();
+      // 2. Set up audio context for visualization + PCM extraction
+      const audioContext = new AudioContext({ sampleRate: 16000 });
       audioContextRef.current = audioContext;
       const source = audioContext.createMediaStreamSource(stream);
+
+      // Analyzer for visualization
       const analyzer = audioContext.createAnalyser();
       analyzer.fftSize = 256;
       source.connect(analyzer);
@@ -121,124 +230,241 @@ export default function LiveMic({
       };
       updateLevel();
 
-      shouldListenRef.current = true;
-      processedResultsRef.current = 0;
+      // 3. Get Speechmatics token from our backend
+      setConnectionStatus("Getting auth token...");
+      const tokenRes = await fetch("/api/speechmatics-token");
+      if (!tokenRes.ok) {
+        const err = await tokenRes.json().catch(() => ({ error: "Token request failed" }));
+        throw new Error(err.error || "Could not get Speechmatics token");
+      }
+      const { token } = await tokenRes.json();
 
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = "en-US";
       startTimeRef.current = Date.now();
 
-      recognition.onresult = (event: SpeechRecognitionEvent) => {
-        // Process all results from where we left off
-        for (let i = processedResultsRef.current; i < event.results.length; i++) {
-          const result = event.results[i];
-          const text = result[0].transcript.trim();
-          if (!text) continue;
+      // 4. Connect to Speechmatics WebSocket directly
+      setConnectionStatus("Connecting WebSocket...");
+      const wsUrl = `wss://eu2.rt.speechmatics.com/v2?jwt=${token}`;
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
 
-          if (result.isFinal) {
-            // Final result — add to transcript and buffer
-            processedResultsRef.current = i + 1;
+      ws.onopen = () => {
+        setConnectionStatus("Starting recognition...");
+        // Send StartRecognition message
+        const startMsg = {
+          message: "StartRecognition",
+          audio_format: {
+            type: "raw",
+            encoding: "pcm_f32le",
+            sample_rate: 16000,
+          },
+          transcription_config: {
+            language: "en",
+            diarization: "speaker",
+            operating_point: "enhanced",
+            max_delay: 5.0,
+            enable_partials: true,
+            speaker_diarization_config: {
+              max_speakers: 2,
+            },
+            additional_vocab: [
+              { content: "lisinopril", sounds_like: ["lice in oh pril"] },
+              { content: "ibuprofen", sounds_like: ["eye bew pro fen"] },
+              { content: "metformin" },
+              { content: "amoxicillin" },
+              { content: "omeprazole" },
+              { content: "atorvastatin" },
+              { content: "bactrim" },
+              { content: "sulfamethoxazole" },
+              { content: "nitrofurantoin" },
+              { content: "penicillin" },
+            ],
+          },
+        };
+        ws.send(JSON.stringify(startMsg));
+      };
+
+      ws.onmessage = (event) => {
+        let msg;
+        try { msg = JSON.parse(event.data); } catch { return; }
+
+        switch (msg.message) {
+          case "RecognitionStarted":
+            setConnectionStatus("Listening via Speechmatics");
+            setIsListening(true);
+            // Start streaming audio
+            startAudioStreaming(source, audioContext, ws);
+            break;
+
+          case "AddPartialTranscript": {
+            // Partial/interim results - show what's being heard but don't commit
+            const parts = msg.results || [];
+            const partialText = parts
+              .map((r: { alternatives?: Array<{ content: string; speaker?: string }> }) => 
+                r.alternatives?.[0]?.content || ""
+              )
+              .join(" ")
+              .replace(/\s+/g, " ")
+              .trim();
+            if (partialText) {
+              // Show buffered text + partial as interim
+              const buffered = sentenceBufferRef.current.trim();
+              setInterimText(buffered ? `${buffered} ${partialText}` : partialText);
+            }
+            break;
+          }
+
+          case "AddTranscript": {
+            // Final transcript words with speaker diarization
+            const results = msg.results || [];
+            if (results.length === 0) break;
+
             setInterimText("");
 
-            const timestamp = (Date.now() - startTimeRef.current) / 1000;
-            lineCountRef.current++;
+            // Process each word/token in the results
+            for (const result of results) {
+              const content = result.alternatives?.[0]?.content || "";
+              if (!content.trim() && result.type === "punctuation") {
+                // It's punctuation - append to buffer
+                sentenceBufferRef.current = sentenceBufferRef.current.trimEnd() + content;
+                continue;
+              }
+              if (!content.trim()) continue;
 
-            // Speaker detection: use content-based heuristics
-            // Questions, directives, medical terms → Doctor
-            // Complaints, "I feel", "I have" → Patient
-            const lower = text.toLowerCase();
-            const doctorSignals = ["?", "prescribe", "recommend", "let me", "i'd like", "your results", "let's", "we should", "i want to check", "how long", "any other", "tell me"];
-            const patientSignals = ["i feel", "i have", "it hurts", "my ", "i've been", "i took", "i take", "i'm getting", "pain in", "for the past"];
-            const doctorScore = doctorSignals.filter(s => lower.includes(s)).length;
-            const patientScore = patientSignals.filter(s => lower.includes(s)).length;
-            const speaker = doctorScore > patientScore ? "Doctor" : patientScore > doctorScore ? "Patient" : (lineCountRef.current % 2 === 1 ? "Doctor" : "Patient");
+              // Get speaker for this word - check multiple possible locations
+              const wordSpeaker = 
+                result.alternatives?.[0]?.speaker || 
+                result.speaker || 
+                result.attribs?.speaker ||
+                sentenceSpeakerRef.current;
 
-            onTranscriptLineRef.current({ speaker, text, timestamp });
-            transcriptBufferRef.current += `${speaker}: ${text}\n`;
-            scheduleAnalysis(timestamp);
-          } else {
-            // Interim result — show in real-time as the user speaks
-            setInterimText(text);
-          }
-        }
-      };
+              // If speaker changed, flush the current buffer first
+              if (wordSpeaker !== sentenceSpeakerRef.current && sentenceBufferRef.current.trim()) {
+                flushSentenceBuffer();
+                sentenceSpeakerRef.current = wordSpeaker;
+              }
 
-      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        if (event.error === "no-speech" || event.error === "aborted") return;
-        console.error("Speech recognition error:", event.error);
-        if (event.error === "network") {
-          setError("Network error. Check your internet connection.");
-        } else if (event.error === "not-allowed") {
-          setError("Microphone access denied. Please allow microphone permissions.");
-        } else {
-          setError(`Recognition error: ${event.error}`);
-        }
-      };
+              // Track speaker
+              if (wordSpeaker) {
+                sentenceSpeakerRef.current = wordSpeaker;
+                lastSpeakerLabelRef.current = wordSpeaker;
+              }
 
-      recognition.onend = () => {
-        if (shouldListenRef.current) {
-          // Chrome stops recognition after ~60s of silence or periodically
-          // Restart immediately
-          processedResultsRef.current = 0;
-          setTimeout(() => {
-            if (shouldListenRef.current && recognitionRef.current) {
-              try {
-                recognitionRef.current.start();
-              } catch {
-                // Create fresh instance if restart fails
-                setTimeout(() => {
-                  if (shouldListenRef.current) {
-                    const fresh = new SpeechRecognition();
-                    fresh.continuous = true;
-                    fresh.interimResults = true;
-                    fresh.lang = "en-US";
-                    fresh.onresult = recognition.onresult;
-                    fresh.onerror = recognition.onerror;
-                    fresh.onend = recognition.onend;
-                    recognitionRef.current = fresh;
-                    try { fresh.start(); } catch { /* give up */ }
-                  }
-                }, 300);
+              // Add word to sentence buffer
+              if (sentenceBufferRef.current && !sentenceBufferRef.current.endsWith(" ")) {
+                sentenceBufferRef.current += " ";
+              }
+              sentenceBufferRef.current += content;
+
+              // Check if we hit a sentence boundary
+              const endsWithPunctuation = /[.!?]$/.test(sentenceBufferRef.current.trim());
+              const bufferLong = sentenceBufferRef.current.trim().length > 80;
+
+              if (endsWithPunctuation || bufferLong) {
+                flushSentenceBuffer();
               }
             }
-          }, 100);
+
+            // Schedule a flush in case speaker pauses (no more words coming)
+            scheduleFlush();
+            break;
+          }
+            break;
+          }
+
+          case "EndOfTranscript":
+            setConnectionStatus("Session ended");
+            break;
+
+          case "Error":
+            console.error("Speechmatics error:", msg);
+            setError(`Speechmatics: ${msg.reason || msg.type || "Connection error"}`);
+            break;
+
+          case "Warning":
+            console.warn("Speechmatics warning:", msg);
+            break;
+
+          // AudioAdded, Info messages — ignore
+          default:
+            break;
         }
       };
 
-      recognition.start();
-      recognitionRef.current = recognition;
-      setIsListening(true);
-    } catch {
-      setError("Could not access microphone. Please allow microphone permissions in your browser settings.");
+      ws.onerror = () => {
+        setError("WebSocket connection to Speechmatics failed. Check network.");
+        setConnectionStatus("");
+      };
+
+      ws.onclose = (event) => {
+        if (event.code !== 1000 && event.code !== 1005) {
+          console.log("Speechmatics WS closed:", event.code, event.reason);
+        }
+        setConnectionStatus("");
+      };
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : "Could not start listening";
+      setError(errMsg);
+      setConnectionStatus("");
+      cleanup();
     }
-  }, [scheduleAnalysis]);
+  }, [scheduleAnalysis, flushSentenceBuffer, scheduleFlush, cleanup]);
+
+  // Stream raw PCM audio to Speechmatics WebSocket
+  const startAudioStreaming = (source: MediaStreamAudioSourceNode, audioContext: AudioContext, ws: WebSocket) => {
+    const processor = audioContext.createScriptProcessor(4096, 1, 1);
+    processorRef.current = processor;
+
+    processor.onaudioprocess = (e) => {
+      if (ws.readyState !== WebSocket.OPEN) return;
+      const inputData = e.inputBuffer.getChannelData(0);
+      // Send Float32 PCM directly
+      const buffer = new Float32Array(inputData.length);
+      buffer.set(inputData);
+      ws.send(buffer.buffer);
+    };
+
+    source.connect(processor);
+    // Connect to destination to keep the processor running (output is silent)
+    processor.connect(audioContext.destination);
+  };
 
   const cleanup = useCallback(() => {
-    shouldListenRef.current = false;
-    if (recognitionRef.current) { try { recognitionRef.current.stop(); } catch {} recognitionRef.current = null; }
+    if (flushTimerRef.current) { clearTimeout(flushTimerRef.current); flushTimerRef.current = null; }
+    if (wsRef.current) {
+      if (wsRef.current.readyState === WebSocket.OPEN) {
+        try { wsRef.current.send(JSON.stringify({ message: "EndOfStream" })); } catch {}
+      }
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    if (processorRef.current) { processorRef.current.disconnect(); processorRef.current = null; }
     if (streamRef.current) { streamRef.current.getTracks().forEach((t) => t.stop()); streamRef.current = null; }
     if (audioContextRef.current) { try { audioContextRef.current.close(); } catch {} audioContextRef.current = null; }
     if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); }
     if (analysisTimerRef.current) { clearTimeout(analysisTimerRef.current); }
+    simulationTimerRef.current.forEach(t => clearTimeout(t));
+    simulationTimerRef.current = [];
     analyzerRef.current = null;
   }, []);
 
   const stopListening = useCallback(() => {
-    cleanup();
-    setIsListening(false);
-    setMicLevel(0);
-    setInterimText("");
-
-    // Flush remaining buffer for final analysis
+    // Flush any remaining sentence buffer
+    if (sentenceBufferRef.current.trim()) {
+      flushSentenceBuffer();
+    }
     if (transcriptBufferRef.current.trim()) {
       const timestamp = (Date.now() - startTimeRef.current) / 1000;
       const buffer = transcriptBufferRef.current;
       transcriptBufferRef.current = "";
       triggerAnalysis(buffer, timestamp);
     }
-  }, [cleanup, triggerAnalysis]);
+    cleanup();
+    setIsListening(false);
+    setMicLevel(0);
+    setInterimText("");
+    setSimulationActive(false);
+    setConnectionStatus("");
+  }, [cleanup, triggerAnalysis, flushSentenceBuffer]);
 
   const handleToggle = () => {
     if (isListening) { stopListening(); } else { startListening(); }
@@ -260,10 +486,18 @@ export default function LiveMic({
         {isListening && (
           <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-red-50 border border-red-200">
             <span className="w-2 h-2 rounded-full bg-red-500 recording-pulse" />
-            <span className="text-[10px] font-bold text-red-700 uppercase tracking-wide">Recording</span>
+            <span className="text-[10px] font-bold text-red-700 uppercase tracking-wide">Live</span>
           </div>
         )}
       </div>
+
+      {/* Connection status */}
+      {connectionStatus && (
+        <div className="mb-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 border border-blue-100">
+          <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+          <span className="text-xs font-medium text-blue-700">{connectionStatus}</span>
+        </div>
+      )}
 
       {/* Mic level visualizer */}
       {isListening && (
@@ -283,12 +517,23 @@ export default function LiveMic({
 
       {error && (
         <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
-          {error}
+          <p>{error}</p>
+          {!isListening && !simulationActive && (
+            <button
+              onClick={() => { onToggle(); startSimulation(); }}
+              className="mt-2 w-full py-2 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-colors flex items-center justify-center gap-2"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
+              </svg>
+              Run Demo Simulation Instead
+            </button>
+          )}
         </div>
       )}
 
-      {/* Live interim text — shows what's being heard RIGHT NOW */}
-      {isListening && interimText && (
+      {/* Live interim text */}
+      {(isListening || simulationActive) && interimText && (
         <div className="mb-4 p-3 rounded-lg bg-blue-50 border border-blue-200">
           <div className="flex items-center gap-2 mb-1">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
@@ -298,13 +543,25 @@ export default function LiveMic({
         </div>
       )}
 
+      {/* Simulation active indicator */}
+      {simulationActive && (
+        <div className="mb-4 p-3 rounded-lg bg-emerald-50 border border-emerald-200">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-xs font-semibold text-emerald-700">Simulating live conversation via Speechmatics pipeline...</span>
+          </div>
+        </div>
+      )}
+
       <button
         onClick={handleToggle}
-        disabled={!patientId}
+        disabled={simulationActive}
         className={`w-full py-3 px-6 rounded-lg font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2.5 ${
           isListening
             ? "bg-red-600 hover:bg-red-700 text-white"
-            : "bg-blue-700 hover:bg-blue-800 text-white disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+            : simulationActive
+              ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+              : "bg-blue-700 hover:bg-blue-800 text-white"
         }`}
       >
         {isListening ? (
@@ -324,9 +581,23 @@ export default function LiveMic({
         )}
       </button>
 
-      {!patientId && (
-        <p className="text-xs text-[var(--text-muted)] text-center mt-3">Select a patient first to enable live analysis</p>
+      {!isListening && !simulationActive && (
+        <div className="mt-3">
+          <button
+            onClick={() => { onToggle(); startSimulation(); }}
+            className="w-full py-2 px-3 rounded-lg text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-colors flex items-center justify-center gap-1.5"
+          >
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
+            </svg>
+            Demo Simulation (no mic needed)
+          </button>
+        </div>
       )}
+
+      <p className="text-[10px] text-[var(--text-muted)] text-center mt-2">
+        Powered by Speechmatics — real-time STT with speaker diarization &amp; medical vocabulary
+      </p>
     </div>
   );
 }

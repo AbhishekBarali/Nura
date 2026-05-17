@@ -18,7 +18,7 @@ export default function Home() {
   const [mode, setMode] = useState<AppMode>("instant");
   const [patients, setPatients] = useState<Patient[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [selectedDemo, setSelectedDemo] = useState<number | null>(null);
+  const [selectedDemo, setSelectedDemo] = useState<number | null>(1);
   const [isProcessing, setIsProcessing] = useState(false);
   const [transcriptLines, setTranscriptLines] = useState<TranscriptLine[]>([]);
   const [actions, setActions] = useState<ActionCard[]>([]);
@@ -261,7 +261,8 @@ export default function Home() {
     if (!selectedDemo) return;
 
     // Auto-select matching patient if not selected
-    const patientId = selectedPatient?.id || selectedDemo;
+    // selectedPatient.id of 0 means "new patient" — use demoId to match
+    const patientId = (selectedPatient && selectedPatient.id > 0) ? selectedPatient.id : selectedDemo;
 
     setIsProcessing(true);
     setTranscriptLines([]);
@@ -641,7 +642,7 @@ export default function Home() {
 
               {mode === "live" && (
                 <LiveMic
-                  patientId={selectedPatient?.id || null}
+                  patientId={selectedPatient ? selectedPatient.id : null}
                   onTranscriptLine={handleLiveTranscript}
                   onAction={handleLiveAction}
                   onSummary={handleLiveSummary}
