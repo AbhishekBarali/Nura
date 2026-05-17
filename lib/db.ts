@@ -6,7 +6,7 @@ let db: Database.Database | null = null;
 
 function getDb(): Database.Database {
   if (!db) {
-    const dbPath = path.join(process.cwd(), "data", "wardscribe.db");
+    const dbPath = path.join(process.cwd(), "data", "nura.db");
     db = new Database(dbPath);
     db.pragma("journal_mode = WAL");
     initializeDb(db);

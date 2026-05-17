@@ -21,7 +21,7 @@ export default function Header() {
             </svg>
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white">WardScribe</h1>
+            <h1 className="text-xl font-bold text-white">Nura</h1>
             <p className="text-xs text-gray-400">Autonomous Clinical Voice Agent</p>
           </div>
         </div>

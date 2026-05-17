@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "WardScribe — Autonomous Clinical Voice Agent",
+  title: "Nura — Autonomous Clinical Voice Agent",
   description:
     "An AI agent that listens to doctor-patient conversations and autonomously detects drug interactions, flags allergy conflicts, routes referrals, and generates clinical notes in real-time.",
 };

@@ -71,7 +71,7 @@ export async function generateSOAPNote(
     return {
       subjective: "Patient presented with concerns discussed during encounter.",
       objective: "See transcript for clinical details discussed.",
-      assessment: "Clinical analysis completed by WardScribe agent.",
+      assessment: "Clinical analysis completed by Nura agent.",
       plan: "Follow up as discussed. Review flagged interactions.",
     };
   }

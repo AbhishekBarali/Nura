@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
       } catch {
         sendEvent("complete", {
           soap_note: {
-            subjective: "Patient encounter documented by WardScribe.",
+            subjective: "Patient encounter documented by Nura.",
             objective: "See transcript for details.",
             assessment: "Clinical analysis completed.",
             plan: "Follow up on flagged items.",

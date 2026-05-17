@@ -333,7 +333,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="border-t border-[#1e1e2e] py-4 text-center text-xs text-gray-600">
-        <p>WardScribe — Autonomous Clinical Voice Agent • Built for AI Agent Olympics Hackathon</p>
+        <p>Nura — Autonomous Clinical Voice Agent • Built for AI Agent Olympics Hackathon</p>
       </footer>
     </div>
   );
