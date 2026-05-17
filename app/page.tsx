@@ -8,6 +8,7 @@ import LiveTranscript from "@/components/LiveTranscript";
 import AgentActions from "@/components/AgentActions";
 import CompleteReport from "@/components/CompleteReport";
 import LiveMic from "@/components/LiveMic";
+import AgentLog, { AgentLogEntry } from "@/components/AgentLog";
 import { Patient, TranscriptLine, ActionCard, CompleteReportData } from "@/lib/types";
 
 type AppMode = "instant" | "live" | "upload";
@@ -33,6 +34,11 @@ export default function Home() {
   const [allTranscriptLines, setAllTranscriptLines] = useState<TranscriptLine[]>([]);
   const [allActions, setAllActions] = useState<ActionCard[]>([]);
   const [instantComplete, setInstantComplete] = useState(false);
+
+  // Agent autonomous actions log
+  const [agentLog, setAgentLog] = useState<AgentLogEntry[]>([]);
+  const [agentActive, setAgentActive] = useState(false);
+  const [liveRecordUpdates, setLiveRecordUpdates] = useState<string[]>([]);
 
   // Fetch patients on mount
   useEffect(() => {
@@ -81,6 +87,120 @@ export default function Home() {
     };
   }, [isProcessing, mode, allTranscriptLines, allActions]);
 
+  // Trigger autonomous agent actions after analysis completes
+  const triggerAgentAutonomousActions = useCallback((analysisActions: ActionCard[], patientName: string, soapNote: { subjective: string; assessment: string }) => {
+    setAgentActive(true);
+    setAgentLog([]);
+    setLiveRecordUpdates([]);
+
+    const entries: AgentLogEntry[] = [];
+    let idx = 0;
+
+    const hasAlerts = analysisActions.some(a => a.type === "alert");
+    const hasReferrals = analysisActions.some(a => a.type === "referral");
+    const conditions = analysisActions.filter(a => a.type === "condition");
+    const medications = analysisActions.filter(a => a.type === "medication");
+    const symptoms = analysisActions.filter(a => a.type === "symptom");
+    const referrals = analysisActions.filter(a => a.type === "referral");
+
+    const addEntry = (entry: Omit<AgentLogEntry, "id">, delay: number) => {
+      setTimeout(() => {
+        const newEntry = { ...entry, id: `log-${idx++}` };
+        entries.push(newEntry);
+        setAgentLog([...entries]);
+      }, delay);
+    };
+
+    addEntry({
+      timestamp: Date.now(), action: "Updating Patient Record", icon: "📋",
+      detail: `Adding ${conditions.length} condition(s), ${medications.length} medication(s) to chart`,
+      status: "running", color: "text-cyan-400",
+    }, 300);
+
+    let updateDelay = 800;
+    if (conditions.length > 0) {
+      setTimeout(() => {
+        const condNames = conditions.map(c => (c.content as Record<string, string>).name).filter(Boolean);
+        setLiveRecordUpdates(prev => [...prev, `+ Condition: ${condNames.join(", ")}`]);
+      }, updateDelay);
+      updateDelay += 600;
+    }
+    if (symptoms.length > 0) {
+      setTimeout(() => {
+        const symNames = symptoms.slice(0, 3).map(s => (s.content as Record<string, string>).description).filter(Boolean);
+        setLiveRecordUpdates(prev => [...prev, `+ Symptoms: ${symNames.join(", ")}`]);
+      }, updateDelay);
+      updateDelay += 600;
+    }
+    if (medications.length > 0) {
+      setTimeout(() => {
+        const medNames = medications.map(m => (m.content as Record<string, string>).name).filter(Boolean);
+        setLiveRecordUpdates(prev => [...prev, `+ Medications discussed: ${medNames.join(", ")}`]);
+      }, updateDelay);
+      updateDelay += 600;
+    }
+
+    setTimeout(() => {
+      entries[0] = { ...entries[0], status: "done" };
+      setAgentLog([...entries]);
+    }, updateDelay);
+
+    addEntry({
+      timestamp: Date.now(), action: "Sending SOAP Report", icon: "📧",
+      detail: `Emailing encounter report to primary care team`,
+      status: "running", color: "text-blue-400",
+    }, updateDelay + 200);
+
+    setTimeout(() => {
+      entries[1] = { ...entries[1], status: "sent", detail: `SOAP note sent to primarycare@clinic.org for ${patientName}` };
+      setAgentLog([...entries]);
+    }, updateDelay + 1500);
+
+    if (hasAlerts) {
+      addEntry({
+        timestamp: Date.now(), action: "Alerting Care Team", icon: "🚨",
+        detail: `Flagging clinical alerts for immediate review`,
+        status: "running", color: "text-rose-400",
+      }, updateDelay + 1800);
+
+      setTimeout(() => {
+        entries[2] = { ...entries[2], status: "sent", detail: "Alert notification sent to attending physician" };
+        setAgentLog([...entries]);
+      }, updateDelay + 3000);
+    }
+
+    if (hasReferrals) {
+      const refDept = (referrals[0]?.content as Record<string, string>)?.department || "Specialist";
+      const refIdx = hasAlerts ? 3 : 2;
+      addEntry({
+        timestamp: Date.now(), action: "Dispatching Referral", icon: "🏥",
+        detail: `Sending referral request to ${refDept}`,
+        status: "running", color: "text-emerald-400",
+      }, updateDelay + (hasAlerts ? 3200 : 2000));
+
+      setTimeout(() => {
+        entries[refIdx] = { ...entries[refIdx], status: "sent", detail: `Referral sent to ${refDept} — awaiting scheduling` };
+        setAgentLog([...entries]);
+      }, updateDelay + (hasAlerts ? 4500 : 3200));
+    }
+
+    const followUpIdx = entries.length;
+    const followUpDelay = updateDelay + (hasAlerts ? 4800 : hasReferrals ? 3500 : 2000);
+    addEntry({
+      timestamp: Date.now(), action: "Scheduling Follow-up", icon: "📅",
+      detail: `Setting 2-week follow-up reminder`,
+      status: "running", color: "text-amber-400",
+    }, followUpDelay);
+
+    setTimeout(() => {
+      if (entries[followUpIdx]) {
+        entries[followUpIdx] = { ...entries[followUpIdx], status: "done", detail: "Follow-up reminder set for 2 weeks" };
+      }
+      setAgentLog([...entries]);
+      setAgentActive(false);
+    }, followUpDelay + 1200);
+  }, []);
+
   // === INSTANT MODE ===
   const startInstantProcessing = useCallback(async () => {
     if (!selectedDemo) return;
@@ -98,6 +218,9 @@ export default function Home() {
     setInstantComplete(false);
     setAllTranscriptLines([]);
     setAllActions([]);
+    setAgentLog([]);
+    setAgentActive(false);
+    setLiveRecordUpdates([]);
 
     try {
       const response = await fetch("/api/instant-analysis", {
@@ -125,11 +248,17 @@ export default function Home() {
         time_saved: data.time_saved,
         total_actions: data.total_actions,
       });
+      // Trigger autonomous agent actions for instant mode too
+      triggerAgentAutonomousActions(
+        data.actions,
+        data.patient?.name || selectedPatient?.name || "Patient",
+        data.soap_note || { subjective: "", assessment: "" }
+      );
     } catch (error) {
       console.error("Instant processing error:", error);
       setIsProcessing(false);
     }
-  }, [selectedPatient, selectedDemo]);
+  }, [selectedPatient, selectedDemo, triggerAgentAutonomousActions]);
 
   // === UPLOAD MODE ===
   const handleAudioUpload = useCallback(async (file: File) => {
@@ -145,6 +274,9 @@ export default function Home() {
     setInstantComplete(false);
     setAllTranscriptLines([]);
     setAllActions([]);
+    setAgentLog([]);
+    setAgentActive(false);
+    setLiveRecordUpdates([]);
     setUploadStatus("Uploading audio...");
 
     try {
@@ -226,6 +358,12 @@ export default function Home() {
               });
               setIsProcessing(false);
               setInstantComplete(true);
+              // Trigger autonomous agent actions
+              triggerAgentAutonomousActions(
+                data.actions,
+                data.patient?.name || selectedPatient?.name || "Patient",
+                data.soap_note || { subjective: "", assessment: "" }
+              );
               break;
             case "error":
               throw new Error(data.error);
@@ -237,7 +375,7 @@ export default function Home() {
       setUploadStatus(`Error: ${error instanceof Error ? error.message : "Processing failed"}`);
       setIsProcessing(false);
     }
-  }, [selectedPatient]);
+  }, [selectedPatient, triggerAgentAutonomousActions]);
 
   // === LIVE MODE handlers ===
   const handleLiveTranscript = useCallback((line: TranscriptLine) => {
@@ -290,6 +428,9 @@ export default function Home() {
     setAllActions([]);
     setUploadedFile(null);
     setUploadStatus("");
+    setAgentLog([]);
+    setAgentActive(false);
+    setLiveRecordUpdates([]);
   };
 
   const isActive = isProcessing || isLiveActive;
@@ -471,6 +612,31 @@ export default function Home() {
                   </span>
                 </button>
               )}
+
+              {/* Live Record Updates */}
+              {liveRecordUpdates.length > 0 && (
+                <div className="elevated-card rounded-2xl overflow-hidden animate-fade-in">
+                  <div className="px-4 py-2.5 border-b border-[var(--border-subtle)] flex items-center gap-2">
+                    <div className="w-5 h-5 rounded-md bg-emerald-500/10 flex items-center justify-center">
+                      <svg className="w-3 h-3 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                      </svg>
+                    </div>
+                    <h3 className="text-[10px] font-bold text-[var(--text-primary)] uppercase tracking-wider">Record Updated</h3>
+                  </div>
+                  <div className="px-4 py-2 space-y-1">
+                    {liveRecordUpdates.map((update, i) => (
+                      <div key={i} className="flex items-center gap-2 py-0.5 animate-fade-in">
+                        <span className="w-1 h-1 rounded-full bg-emerald-400 flex-shrink-0" />
+                        <span className="text-[11px] text-emerald-300/90 font-medium">{update}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Agent Decision Log */}
+              <AgentLog entries={agentLog} isActive={agentActive} />
             </div>
 
             {/* RIGHT PANEL — Live Results */}
