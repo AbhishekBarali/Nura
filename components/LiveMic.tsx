@@ -73,8 +73,28 @@ export default function LiveMic({
   useEffect(() => { onSummaryRef.current = onSummary; }, [onSummary]);
 
   useEffect(() => {
-    return () => { cleanup(); };
+    return () => { cleanupAll(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Cleanup function - defined early so other hooks can reference it
+  const cleanupAll = useCallback(() => {
+    if (flushTimerRef.current) { clearTimeout(flushTimerRef.current); flushTimerRef.current = null; }
+    if (wsRef.current) {
+      if (wsRef.current.readyState === WebSocket.OPEN) {
+        try { wsRef.current.send(JSON.stringify({ message: "EndOfStream" })); } catch {}
+      }
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    if (processorRef.current) { processorRef.current.disconnect(); processorRef.current = null; }
+    if (streamRef.current) { streamRef.current.getTracks().forEach((t) => t.stop()); streamRef.current = null; }
+    if (audioContextRef.current) { try { audioContextRef.current.close(); } catch {} audioContextRef.current = null; }
+    if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); }
+    if (analysisTimerRef.current) { clearTimeout(analysisTimerRef.current); }
+    simulationTimerRef.current.forEach(t => clearTimeout(t));
+    simulationTimerRef.current = [];
+    analyzerRef.current = null;
   }, []);
 
   const triggerAnalysis = useCallback(async (transcript: string, timestamp: number) => {
@@ -403,9 +423,9 @@ export default function LiveMic({
       const errMsg = err instanceof Error ? err.message : "Could not start listening";
       setError(errMsg);
       setConnectionStatus("");
-      cleanup();
+      cleanupAll();
     }
-  }, [scheduleAnalysis, flushSentenceBuffer, scheduleFlush, cleanup]);
+  }, [scheduleAnalysis, flushSentenceBuffer, scheduleFlush, cleanupAll]);
 
   // Stream raw PCM audio to Speechmatics WebSocket
   const startAudioStreaming = (source: MediaStreamAudioSourceNode, audioContext: AudioContext, ws: WebSocket) => {
@@ -426,25 +446,6 @@ export default function LiveMic({
     processor.connect(audioContext.destination);
   };
 
-  const cleanup = useCallback(() => {
-    if (flushTimerRef.current) { clearTimeout(flushTimerRef.current); flushTimerRef.current = null; }
-    if (wsRef.current) {
-      if (wsRef.current.readyState === WebSocket.OPEN) {
-        try { wsRef.current.send(JSON.stringify({ message: "EndOfStream" })); } catch {}
-      }
-      wsRef.current.close();
-      wsRef.current = null;
-    }
-    if (processorRef.current) { processorRef.current.disconnect(); processorRef.current = null; }
-    if (streamRef.current) { streamRef.current.getTracks().forEach((t) => t.stop()); streamRef.current = null; }
-    if (audioContextRef.current) { try { audioContextRef.current.close(); } catch {} audioContextRef.current = null; }
-    if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); }
-    if (analysisTimerRef.current) { clearTimeout(analysisTimerRef.current); }
-    simulationTimerRef.current.forEach(t => clearTimeout(t));
-    simulationTimerRef.current = [];
-    analyzerRef.current = null;
-  }, []);
-
   const stopListening = useCallback(() => {
     // Flush any remaining sentence buffer
     if (sentenceBufferRef.current.trim()) {
@@ -456,13 +457,13 @@ export default function LiveMic({
       transcriptBufferRef.current = "";
       triggerAnalysis(buffer, timestamp);
     }
-    cleanup();
+    cleanupAll();
     setIsListening(false);
     setMicLevel(0);
     setInterimText("");
     setSimulationActive(false);
     setConnectionStatus("");
-  }, [cleanup, triggerAnalysis, flushSentenceBuffer]);
+  }, [cleanupAll, triggerAnalysis, flushSentenceBuffer]);
 
   const handleToggle = () => {
     if (isListening) { stopListening(); } else { startListening(); }
