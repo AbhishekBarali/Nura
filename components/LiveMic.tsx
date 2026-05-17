@@ -368,8 +368,6 @@ export default function LiveMic({
             scheduleFlush();
             break;
           }
-            break;
-          }
 
           case "EndOfTranscript":
             setConnectionStatus("Session ended");
