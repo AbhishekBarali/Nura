@@ -145,7 +145,7 @@ export default function Home() {
     setInstantComplete(false);
     setAllTranscriptLines([]);
     setAllActions([]);
-    setUploadStatus("Transcribing audio...");
+    setUploadStatus("Uploading audio...");
 
     try {
       const formData = new FormData();
@@ -159,30 +159,79 @@ export default function Home() {
         body: formData,
       });
 
-      if (!response.ok) {
+      if (!response.ok && !response.headers.get("content-type")?.includes("text/event-stream")) {
         const err = await response.json();
         throw new Error(err.error || "Audio processing failed");
       }
 
-      const data = await response.json();
-      setUploadStatus("Analysis complete!");
+      // Handle SSE stream
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("No response stream");
 
-      // Set patient if returned
-      if (data.patient && !selectedPatient) {
-        setSelectedPatient(data.patient);
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const messages = buffer.split("\n\n");
+        buffer = messages.pop() || "";
+
+        for (const msg of messages) {
+          if (!msg.trim()) continue;
+          const eventMatch = msg.match(/^event: (.+)$/m);
+          const dataMatch = msg.match(/^data: (.+)$/m);
+          if (!eventMatch || !dataMatch) continue;
+
+          const event = eventMatch[1];
+          let data;
+          try { data = JSON.parse(dataMatch[1]); } catch { continue; }
+
+          switch (event) {
+            case "phase":
+              setUploadStatus(data.message);
+              if (data.duration) setDuration(data.duration);
+              break;
+            case "progress":
+              setUploadStatus(data.message);
+              break;
+            case "transcript_lines":
+              setTranscriptLines((prev) => [...prev, ...data.lines]);
+              if (data.lines.length > 0) {
+                setCurrentTime(data.lines[data.lines.length - 1].timestamp);
+              }
+              break;
+            case "actions_partial":
+              setActions(data.actions);
+              break;
+            case "actions":
+              setActions(data.actions);
+              break;
+            case "complete":
+              setUploadStatus("Analysis complete!");
+              if (data.patient && !selectedPatient) {
+                setSelectedPatient(data.patient);
+              }
+              setSummary(data.summary);
+              setDuration(data.duration || 60);
+              setActions(data.actions);
+              setReport({
+                soap_note: data.soap_note,
+                actions: data.actions,
+                record_changes: [],
+                time_saved: data.time_saved || "8 minutes",
+                total_actions: data.total_actions || data.actions.length,
+              });
+              setIsProcessing(false);
+              setInstantComplete(true);
+              break;
+            case "error":
+              throw new Error(data.error);
+          }
+        }
       }
-
-      setAllTranscriptLines(data.transcript);
-      setAllActions(data.actions);
-      setSummary(data.summary);
-      setDuration(data.duration || 60);
-      setReport({
-        soap_note: data.soap_note,
-        actions: data.actions,
-        record_changes: [],
-        time_saved: data.time_saved || "8 minutes",
-        total_actions: data.total_actions || data.actions.length,
-      });
     } catch (error) {
       console.error("Upload processing error:", error);
       setUploadStatus(`Error: ${error instanceof Error ? error.message : "Processing failed"}`);

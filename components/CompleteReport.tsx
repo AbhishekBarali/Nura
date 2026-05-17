@@ -37,7 +37,7 @@ export default function CompleteReport({ report, onClose }: CompleteReportProps)
             <p className="text-[10px] font-bold text-cyan-300/70 uppercase tracking-[0.2em] mb-2 relative">Time Saved This Encounter</p>
             <p className="text-4xl font-display text-white relative">{report.time_saved}</p>
             <p className="text-[11px] text-[var(--text-muted)] mt-2 relative">
-              Manual documentation: ~12 min → Nura: Real-time (0 additional min)
+              Manual charting & documentation → Nura: Automated in real-time
             </p>
           </div>
 
