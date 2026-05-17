@@ -32,11 +32,58 @@ export default function LiveMic({
   const transcriptBufferRef = useRef<string>("");
   const lineCountRef = useRef(0);
   const startTimeRef = useRef(0);
+  const shouldListenRef = useRef(false);
+  const analysisTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastAnalysisRef = useRef(0);
+
+  // Keep callback refs fresh to avoid stale closures
+  const onTranscriptLineRef = useRef(onTranscriptLine);
+  const onActionRef = useRef(onAction);
+  const onSummaryRef = useRef(onSummary);
+  useEffect(() => { onTranscriptLineRef.current = onTranscriptLine; }, [onTranscriptLine]);
+  useEffect(() => { onActionRef.current = onAction; }, [onAction]);
+  useEffect(() => { onSummaryRef.current = onSummary; }, [onSummary]);
 
   useEffect(() => {
     return () => { stopListening(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const triggerAnalysis = useCallback(async (transcript: string, timestamp: number) => {
+    if (!transcript.trim()) return;
+    lastAnalysisRef.current = Date.now();
+    try {
+      const response = await fetch("/api/analyze-chunk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ patientId: patientId || 0, transcript, timestamp }),
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (data.actions) { for (const action of data.actions) { onActionRef.current(action); } }
+      if (data.summary) { onSummaryRef.current(data.summary); }
+    } catch (err) { console.error("Analysis failed:", err); }
+  }, [patientId]);
+
+  const scheduleAnalysis = useCallback((timestamp: number) => {
+    // Debounce: wait 1.5s after last speech before triggering analysis
+    // This batches short phrases together for better LLM context
+    if (analysisTimerRef.current) clearTimeout(analysisTimerRef.current);
+    analysisTimerRef.current = setTimeout(() => {
+      if (transcriptBufferRef.current.trim()) {
+        triggerAnalysis(transcriptBufferRef.current, timestamp);
+        transcriptBufferRef.current = "";
+      }
+    }, 1500);
+
+    // Force send if buffer grows large (>3 lines accumulated) regardless of debounce
+    const lines = transcriptBufferRef.current.split("\n").filter(Boolean);
+    if (lines.length >= 3) {
+      if (analysisTimerRef.current) clearTimeout(analysisTimerRef.current);
+      triggerAnalysis(transcriptBufferRef.current, timestamp);
+      transcriptBufferRef.current = "";
+    }
+  }, [triggerAnalysis]);
 
   const startListening = useCallback(async () => {
     setError(null);
@@ -68,6 +115,8 @@ export default function LiveMic({
       };
       updateLevel();
 
+      shouldListenRef.current = true;
+
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
       recognition.interimResults = true;
@@ -81,28 +130,42 @@ export default function LiveMic({
           if (!text) return;
 
           const timestamp = (Date.now() - startTimeRef.current) / 1000;
-          const speaker = lineCountRef.current % 2 === 0 ? "Doctor" : "Patient";
           lineCountRef.current++;
 
-          onTranscriptLine({ speaker, text, timestamp });
+          // Detect speaker: simple heuristic — question-like phrases or medical terms = Doctor
+          const isQuestion = text.endsWith("?");
+          const doctorPhrases = ["prescribe", "recommend", "let me", "i'd like to", "your results", "let's", "i think we should", "i want to"];
+          const looksLikeDoctor = isQuestion || doctorPhrases.some(p => text.toLowerCase().includes(p));
+          const speaker = looksLikeDoctor ? "Doctor" : "Patient";
+
+          onTranscriptLineRef.current({ speaker, text, timestamp });
           transcriptBufferRef.current += `${speaker}: ${text}\n`;
 
-          if (lineCountRef.current % 2 === 0) {
-            triggerAnalysis(transcriptBufferRef.current, timestamp);
-            transcriptBufferRef.current = "";
-          }
+          // Schedule analysis with debounce
+          scheduleAnalysis(timestamp);
         }
       };
 
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        if (event.error !== "no-speech") {
-          setError(`Recognition error: ${event.error}`);
-        }
+        if (event.error === "no-speech") return;
+        if (event.error === "aborted") return;
+        console.error("Speech recognition error:", event.error);
+        setError(`Recognition error: ${event.error}`);
       };
 
       recognition.onend = () => {
-        if (isListening && recognitionRef.current) {
-          try { recognitionRef.current.start(); } catch { /* already started */ }
+        // Use ref instead of state to avoid stale closure
+        if (shouldListenRef.current) {
+          try {
+            recognitionRef.current?.start();
+          } catch {
+            // If start fails, retry after a short delay
+            setTimeout(() => {
+              if (shouldListenRef.current && recognitionRef.current) {
+                try { recognitionRef.current.start(); } catch { /* give up */ }
+              }
+            }, 200);
+          }
         }
       };
 
@@ -112,39 +175,26 @@ export default function LiveMic({
     } catch {
       setError("Could not access microphone. Please allow microphone permissions.");
     }
-  }, [isListening, onTranscriptLine]);
+  }, [scheduleAnalysis]);
 
   const stopListening = useCallback(() => {
+    shouldListenRef.current = false;
     if (recognitionRef.current) { recognitionRef.current.stop(); recognitionRef.current = null; }
     if (streamRef.current) { streamRef.current.getTracks().forEach((t) => t.stop()); streamRef.current = null; }
     if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; }
     if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); }
+    if (analysisTimerRef.current) { clearTimeout(analysisTimerRef.current); }
     analyzerRef.current = null;
     setIsListening(false);
     setMicLevel(0);
 
-    if (transcriptBufferRef.current && patientId) {
+    // Flush remaining buffer
+    if (transcriptBufferRef.current.trim()) {
       const timestamp = (Date.now() - startTimeRef.current) / 1000;
       triggerAnalysis(transcriptBufferRef.current, timestamp);
       transcriptBufferRef.current = "";
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [patientId]);
-
-  const triggerAnalysis = useCallback(async (transcript: string, timestamp: number) => {
-    if (!transcript.trim()) return;
-    try {
-      const response = await fetch("/api/analyze-chunk", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ patientId: patientId || 0, transcript, timestamp }),
-      });
-      if (!response.ok) return;
-      const data = await response.json();
-      if (data.actions) { for (const action of data.actions) { onAction(action); } }
-      if (data.summary) { onSummary(data.summary); }
-    } catch (err) { console.error("Analysis failed:", err); }
-  }, [patientId, onAction, onSummary]);
+  }, [triggerAnalysis]);
 
   const handleToggle = () => {
     if (isListening) { stopListening(); } else { startListening(); }
