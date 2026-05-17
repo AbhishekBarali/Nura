@@ -29,8 +29,6 @@ export default function Home() {
   const [isLiveActive, setIsLiveActive] = useState(false);
 
   // For instant mode staggered animation
-  const [visibleTranscriptCount, setVisibleTranscriptCount] = useState(0);
-  const [visibleActionCount, setVisibleActionCount] = useState(0);
   const [allTranscriptLines, setAllTranscriptLines] = useState<TranscriptLine[]>([]);
   const [allActions, setAllActions] = useState<ActionCard[]>([]);
   const [instantComplete, setInstantComplete] = useState(false);
@@ -56,18 +54,17 @@ export default function Home() {
     if (!isProcessing || mode !== "instant") return;
 
     // Animate transcript lines in
+    let transcriptIdx = 0;
     const transcriptInterval = setInterval(() => {
-      setVisibleTranscriptCount((prev) => {
-        if (prev >= allTranscriptLines.length) {
-          clearInterval(transcriptInterval);
-          return prev;
-        }
-        const line = allTranscriptLines[prev];
-        setTranscriptLines((tl) => [...tl, line]);
-        setCurrentTime(line.timestamp);
-        return prev + 1;
-      });
-    }, 120); // 120ms per line = ~1.2s for 10 lines
+      if (transcriptIdx >= allTranscriptLines.length) {
+        clearInterval(transcriptInterval);
+        return;
+      }
+      const line = allTranscriptLines[transcriptIdx];
+      setTranscriptLines((tl) => [...tl, line]);
+      setCurrentTime(line.timestamp);
+      transcriptIdx++;
+    }, 120);
 
     // Animate action cards in (start slightly after transcript)
     const actionTimeout = setTimeout(() => {
@@ -75,7 +72,6 @@ export default function Home() {
       const actionInterval = setInterval(() => {
         if (actionIdx >= allActions.length) {
           clearInterval(actionInterval);
-          // Show complete state
           setTimeout(() => {
             setIsProcessing(false);
             setInstantComplete(true);
@@ -83,10 +79,9 @@ export default function Home() {
           return;
         }
         setActions((prev) => [...prev, allActions[actionIdx]]);
-        setVisibleActionCount((prev) => prev + 1);
         actionIdx++;
-      }, 200); // 200ms per action card
-    }, 600); // Start actions 600ms after transcript begins
+      }, 200);
+    }, 600);
 
     return () => {
       clearInterval(transcriptInterval);
@@ -103,7 +98,7 @@ export default function Home() {
       allActions.length * 200 + 600
     );
     const stepMs = 50;
-    const increment = (duration / (totalAnimTime / stepMs));
+    const increment = duration / (totalAnimTime / stepMs);
 
     const interval = setInterval(() => {
       setCurrentTime((prev) => {
@@ -122,7 +117,6 @@ export default function Home() {
   const startInstantProcessing = useCallback(async () => {
     if (!selectedPatient || !selectedDemo) return;
 
-    // Reset state
     setIsProcessing(true);
     setTranscriptLines([]);
     setActions([]);
@@ -130,8 +124,6 @@ export default function Home() {
     setReport(null);
     setShowReport(false);
     setCurrentTime(0);
-    setVisibleTranscriptCount(0);
-    setVisibleActionCount(0);
     setInstantComplete(false);
     setAllTranscriptLines([]);
     setAllActions([]);
@@ -140,16 +132,12 @@ export default function Home() {
       const response = await fetch("/api/instant-analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          patientId: selectedPatient.id,
-          demoId: selectedDemo,
-        }),
+        body: JSON.stringify({ patientId: selectedPatient.id, demoId: selectedDemo }),
       });
 
       if (!response.ok) throw new Error("Analysis failed");
       const data = await response.json();
 
-      // Store all data for staggered animation
       setAllTranscriptLines(data.transcript);
       setAllActions(data.actions);
       setSummary(data.summary);
@@ -187,11 +175,9 @@ export default function Home() {
 
   const handleLiveToggle = useCallback(() => {
     if (isLiveActive) {
-      // Stopping
       setIsLiveActive(false);
       setIsProcessing(false);
     } else {
-      // Starting
       setIsLiveActive(true);
       setIsProcessing(true);
       setTranscriptLines([]);
@@ -200,11 +186,10 @@ export default function Home() {
       setReport(null);
       setShowReport(false);
       setCurrentTime(0);
-      setDuration(300); // 5 min max for live
+      setDuration(300);
     }
   }, [isLiveActive]);
 
-  // Reset when switching modes
   const switchMode = (newMode: AppMode) => {
     setMode(newMode);
     setIsProcessing(false);
@@ -222,46 +207,46 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col app-wrapper">
       <Header />
 
-      <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-6 space-y-6">
+      <main className="flex-1 max-w-7xl mx-auto w-full px-6 py-8 space-y-6">
         {/* Mode Switcher */}
-        <div className="flex items-center justify-center gap-1 p-1 bg-[#12121a] border border-[#1e1e2e] rounded-xl w-fit mx-auto">
-          <button
-            onClick={() => switchMode("instant")}
-            className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
-              mode === "instant"
-                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/20"
-                : "text-gray-400 hover:text-white"
-            }`}
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            Instant Demo
-          </button>
-          <button
-            onClick={() => switchMode("live")}
-            className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
-              mode === "live"
-                ? "bg-green-600 text-white shadow-lg shadow-green-500/20"
-                : "text-gray-400 hover:text-white"
-            }`}
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-            </svg>
-            Live Mic
-          </button>
+        <div className="flex flex-col items-center gap-3">
+          <div className="flex items-center gap-1 p-1 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-2xl">
+            <button
+              onClick={() => switchMode("instant")}
+              className={`px-6 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 flex items-center gap-2 ${
+                mode === "instant"
+                  ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/20"
+                  : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              Instant Demo
+            </button>
+            <button
+              onClick={() => switchMode("live")}
+              className={`px-6 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 flex items-center gap-2 ${
+                mode === "live"
+                  ? "bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/20"
+                  : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+              </svg>
+              Live Mic
+            </button>
+          </div>
+          <p className="text-[11px] text-[var(--text-muted)]">
+            {mode === "instant"
+              ? "Pre-recorded scenarios — full agent pipeline in seconds"
+              : "Real-time microphone analysis — speak and watch the agent respond"}
+          </p>
         </div>
-
-        {/* Mode description */}
-        <p className="text-center text-xs text-gray-500">
-          {mode === "instant"
-            ? "Pre-recorded scenarios analyzed instantly — see the full agent pipeline in seconds"
-            : "Speak into your microphone — the agent analyzes your speech in real-time"}
-        </p>
 
         {/* Patient Selection */}
         <PatientSelector
@@ -293,7 +278,7 @@ export default function Home() {
           />
         )}
 
-        {/* Audio Player (visual progress) */}
+        {/* Audio Player */}
         {(isProcessing || transcriptLines.length > 0) && mode === "instant" && (
           <AudioPlayer
             isPlaying={isProcessing}
@@ -304,23 +289,28 @@ export default function Home() {
         )}
 
         {/* Main Content: Transcript + Agent Actions */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <LiveTranscript lines={transcriptLines} isProcessing={isProcessing || isLiveActive} />
-          <AgentActions
-            actions={actions}
-            summary={summary}
-            isProcessing={isProcessing || isLiveActive}
-          />
+          <AgentActions actions={actions} summary={summary} isProcessing={isProcessing || isLiveActive} />
         </div>
 
         {/* Complete Report Button */}
         {report && !isProcessing && (mode === "instant" ? instantComplete : !isLiveActive) && (
-          <div className="flex justify-center">
+          <div className="flex justify-center pt-2">
             <button
               onClick={() => setShowReport(true)}
-              className="px-8 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-medium rounded-xl transition-all shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/40 animate-fade-in"
+              className="group px-8 py-4 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 hover:from-cyan-500/20 hover:to-blue-500/20 border border-cyan-500/20 hover:border-cyan-500/40 text-white font-semibold rounded-2xl transition-all duration-300 shadow-lg shadow-cyan-500/5 hover:shadow-cyan-500/15 animate-fade-in flex items-center gap-3"
             >
-              📋 View Complete Clinical Report
+              <span className="w-8 h-8 rounded-xl bg-cyan-500/15 flex items-center justify-center group-hover:bg-cyan-500/25 transition-colors">
+                📋
+              </span>
+              <span>
+                <span className="block text-sm">View Complete Report</span>
+                <span className="block text-[10px] text-[var(--text-muted)] font-normal">SOAP note, actions, time saved</span>
+              </span>
+              <svg className="w-4 h-4 text-cyan-400 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+              </svg>
             </button>
           </div>
         )}
@@ -332,8 +322,14 @@ export default function Home() {
       )}
 
       {/* Footer */}
-      <footer className="border-t border-[#1e1e2e] py-4 text-center text-xs text-gray-600">
-        <p>Nura — Autonomous Clinical Voice Agent • Built for AI Agent Olympics Hackathon</p>
+      <footer className="border-t border-[var(--border-subtle)] py-5 text-center">
+        <p className="text-[11px] text-[var(--text-muted)] tracking-wide">
+          <span className="font-display text-sm text-[var(--text-secondary)]">Nura</span>
+          <span className="mx-2 text-[var(--border-medium)]">·</span>
+          Autonomous Clinical Voice Agent
+          <span className="mx-2 text-[var(--border-medium)]">·</span>
+          AI Agent Olympics
+        </p>
       </footer>
     </div>
   );

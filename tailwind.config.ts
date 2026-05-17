@@ -7,19 +7,27 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        display: ["'Instrument Serif'", "Georgia", "serif"],
+        body: ["'DM Sans'", "system-ui", "sans-serif"],
+      },
       animation: {
-        "fade-in": "fadeIn 0.3s ease-in-out",
+        "fade-in": "fade-in-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards",
         "slide-in": "slideIn 0.4s ease-out",
-        pulse: "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+        breathe: "breathe 2s ease-in-out infinite",
       },
       keyframes: {
-        fadeIn: {
-          "0%": { opacity: "0", transform: "translateY(10px)" },
+        "fade-in-up": {
+          "0%": { opacity: "0", transform: "translateY(8px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
         slideIn: {
           "0%": { opacity: "0", transform: "translateX(20px)" },
           "100%": { opacity: "1", transform: "translateX(0)" },
+        },
+        breathe: {
+          "0%, 100%": { opacity: "0.4", transform: "scale(0.9)" },
+          "50%": { opacity: "1", transform: "scale(1.1)" },
         },
       },
     },

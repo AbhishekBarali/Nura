@@ -1,29 +1,87 @@
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --background: #0a0a0f;
-  --foreground: #e8e8ed;
-  --card: #12121a;
-  --card-border: #1e1e2e;
-  --accent: #6366f1;
+  --bg-primary: #0c1220;
+  --bg-secondary: #111827;
+  --bg-elevated: #1a2332;
+  --bg-surface: #1e293b;
+  --border-subtle: rgba(148, 163, 184, 0.08);
+  --border-medium: rgba(148, 163, 184, 0.15);
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent-primary: #22d3ee;
+  --accent-secondary: #06b6d4;
+  --accent-glow: rgba(34, 211, 238, 0.15);
+  --alert-red: #f43f5e;
+  --alert-red-glow: rgba(244, 63, 94, 0.12);
+  --alert-amber: #f59e0b;
+  --alert-green: #10b981;
+  --alert-purple: #a78bfa;
+  --font-display: 'Instrument Serif', Georgia, serif;
+  --font-body: 'DM Sans', system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: system-ui, -apple-system, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Background texture — subtle noise grain */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.015'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Ambient gradient orbs */
+body::after {
+  content: '';
+  position: fixed;
+  top: -20%;
+  right: -10%;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.04) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+#__next, main, .app-wrapper {
+  position: relative;
+  z-index: 1;
 }
 
 @layer utilities {
+  .font-display {
+    font-family: var(--font-display);
+  }
+
+  .font-body {
+    font-family: var(--font-body);
+  }
+
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: #2e2e3e transparent;
+    scrollbar-color: rgba(148, 163, 184, 0.15) transparent;
   }
 
   .scrollbar-thin::-webkit-scrollbar {
-    width: 6px;
+    width: 5px;
   }
 
   .scrollbar-thin::-webkit-scrollbar-track {
@@ -31,51 +89,140 @@ body {
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: #2e2e3e;
-    border-radius: 3px;
+    background-color: rgba(148, 163, 184, 0.15);
+    border-radius: 10px;
+  }
+
+  .text-gradient {
+    background: linear-gradient(135deg, var(--accent-primary), #818cf8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
 }
 
-/* Pulse animation for active recording */
+/* Recording pulse */
 @keyframes recording-pulse {
   0%, 100% {
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+    box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.5);
   }
   50% {
-    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+    box-shadow: 0 0 0 12px rgba(244, 63, 94, 0);
   }
 }
 
 .recording-pulse {
-  animation: recording-pulse 2s ease-in-out infinite;
+  animation: recording-pulse 1.8s ease-in-out infinite;
 }
 
-/* Card entrance animation */
+/* Card entrance — slide up with fade */
 @keyframes card-enter {
   0% {
     opacity: 0;
-    transform: translateX(20px) scale(0.95);
+    transform: translateY(12px) scale(0.97);
   }
   100% {
     opacity: 1;
-    transform: translateX(0) scale(1);
+    transform: translateY(0) scale(1);
   }
 }
 
 .card-enter {
-  animation: card-enter 0.4s ease-out forwards;
+  animation: card-enter 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* Progress bar animation */
+/* Fade in up */
+@keyframes fade-in-up {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Shimmer for loading states */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shimmer {
+  background: linear-gradient(90deg, transparent 25%, rgba(34, 211, 238, 0.05) 50%, transparent 75%);
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+/* Progress glow */
 @keyframes progress-glow {
   0%, 100% {
-    box-shadow: 0 0 4px rgba(99, 102, 241, 0.3);
+    box-shadow: 0 0 6px rgba(34, 211, 238, 0.3), 0 0 2px rgba(34, 211, 238, 0.5);
   }
   50% {
-    box-shadow: 0 0 12px rgba(99, 102, 241, 0.6);
+    box-shadow: 0 0 16px rgba(34, 211, 238, 0.5), 0 0 4px rgba(34, 211, 238, 0.8);
   }
 }
 
 .progress-glow {
   animation: progress-glow 2s ease-in-out infinite;
+}
+
+/* Breathing dot */
+@keyframes breathe {
+  0%, 100% { opacity: 0.4; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+.animate-breathe {
+  animation: breathe 2s ease-in-out infinite;
+}
+
+/* Glass morphism card */
+.glass-card {
+  background: rgba(30, 41, 59, 0.5);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+}
+
+/* Elevated card with glow on hover */
+.elevated-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.elevated-card:hover {
+  border-color: var(--border-medium);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2), 0 0 0 1px var(--border-medium);
+}
+
+/* Alert card glow effects */
+.alert-glow-red {
+  box-shadow: inset 0 0 0 1px rgba(244, 63, 94, 0.2), 0 0 20px rgba(244, 63, 94, 0.05);
+}
+
+.alert-glow-amber {
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.2), 0 0 20px rgba(245, 158, 11, 0.05);
+}
+
+.alert-glow-green {
+  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.2), 0 0 20px rgba(16, 185, 129, 0.05);
+}
+
+.alert-glow-cyan {
+  box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.2), 0 0 20px rgba(34, 211, 238, 0.05);
+}
+
+.alert-glow-purple {
+  box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.2), 0 0 20px rgba(167, 139, 250, 0.05);
 }

@@ -14,8 +14,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-[#0a0a0f] antialiased">
-        {children}
+      <body className="min-h-screen antialiased">
+        <div className="app-wrapper relative z-10">
+          {children}
+        </div>
       </body>
     </html>
   );
