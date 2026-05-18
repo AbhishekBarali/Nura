@@ -1,52 +1,401 @@
 # Nura — Autonomous Clinical Voice Agent
 
-An AI agent that listens to doctor-patient conversations and autonomously detects drug interactions, flags allergy conflicts, routes referrals, and generates clinical notes — in real-time.
+![Next.js](https://img.shields.io/badge/Next.js-14.2-black?logo=next.js)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.5-blue?logo=typescript)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4-06B6D4?logo=tailwindcss)
+![License](https://img.shields.io/badge/License-Not_Specified-lightgrey)
 
-## Quick Start
+**An autonomous AI agent that listens to doctor-patient conversations and independently detects drug interactions, flags allergy conflicts, routes referrals, and generates structured clinical documentation — all in real-time, without any commands from the physician.**
+
+---
+
+## Table of Contents
+
+- [Nura — Autonomous Clinical Voice Agent](#nura--autonomous-clinical-voice-agent)
+  - [Table of Contents](#table-of-contents)
+  - [Features](#features)
+  - [Tech Stack](#tech-stack)
+  - [Architecture Overview](#architecture-overview)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+  - [Configuration](#configuration)
+  - [Usage](#usage)
+    - [Instant Demo Mode](#instant-demo-mode)
+    - [Live Microphone Mode](#live-microphone-mode)
+  - [Available Scripts](#available-scripts)
+  - [Project Structure](#project-structure)
+  - [API Reference](#api-reference)
+    - [`GET /api/patients`](#get-apipatients)
+    - [`POST /api/instant-analysis`](#post-apiinstant-analysis)
+    - [`POST /api/process-audio`](#post-apiprocess-audio)
+    - [`POST /api/analyze-chunk`](#post-apianalyze-chunk)
+    - [`GET /api/speechmatics-token`](#get-apispeechmatics-token)
+  - [Demo Scenarios](#demo-scenarios)
+  - [Deployment](#deployment)
+    - [Vultr (Recommended for Hackathon)](#vultr-recommended-for-hackathon)
+    - [Vercel](#vercel)
+  - [Contributing](#contributing)
+  - [License](#license)
+  - [Tech Stack](#tech-stack-1)
+  - [Environment Variables](#environment-variables)
+  - [Architecture](#architecture)
+  - [Project Structure](#project-structure-1)
+  - [Deployment (Vultr)](#deployment-vultr)
+  - [Built For](#built-for)
+
+---
+
+## Features
+
+- **One-button operation** — press play and the agent handles everything autonomously
+- **Real-time transcription** with speaker diarization (Doctor vs. Patient) via Speechmatics
+- **Drug interaction detection** — cross-references mentioned medications against patient records
+- **Allergy conflict alerts** — flags prescriptions that conflict with known allergies
+- **Urgent finding escalation** — identifies critical symptoms and triggers specialist referrals
+- **Autonomous post-analysis pipeline** — updates patient records, emails SOAP reports, alerts care teams, dispatches referrals, and schedules follow-ups without user input
+- **SOAP note generation** — produces structured clinical documentation (Subjective, Objective, Assessment, Plan)
+- **Live microphone mode** — real-time speech analysis via Web Speech API
+- **Instant demo mode** — pre-recorded scenarios with staggered card animations for rapid demonstration
+- **Dark-themed, responsive UI** — built with Tailwind CSS and custom animations
+
+---
+
+## Tech Stack
+
+| Layer | Technology | Version | Purpose |
+|-------|-----------|---------|---------|
+| Framework | Next.js (App Router) | 14.2 | Full-stack: React frontend + API routes |
+| Language | TypeScript | 5.5 | Type safety across the codebase |
+| Speech-to-Text | Speechmatics Real-Time Client | 8.3.2 | Transcription with speaker diarization |
+| Primary LLM | Featherless AI (google/gemma-4-31B-it) | — | Clinical reasoning, entity extraction, SOAP generation |
+| Fallback LLM | Google Gemini (gemini-2.0-flash) | — | Secondary reasoning engine |
+| LLM SDK | OpenAI Node SDK | 4.50 | OpenAI-compatible client for Featherless |
+| AI SDK | @google/generative-ai | 0.21 | Gemini integration |
+| Styling | Tailwind CSS | 3.4 | Dark theme, responsive UI, animations |
+| Fonts | Source Sans 3 + Literata | — | Body + display typography |
+
+---
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        BROWSER (React)                           │
+│                                                                  │
+│  Landing Page (/)  ──→  Demo Page (/demo)                       │
+│                         ├── Patient Selector                     │
+│                         ├── Audio Source Picker (Instant / Live) │
+│                         ├── Live Transcript (color-coded)        │
+│                         ├── Agent Actions Panel (cards)          │
+│                         ├── Agent Decision Log                   │
+│                         └── Complete Report Modal                │
+└────────────────────────────────┬────────────────────────────────┘
+                                 │ SSE / Fetch
+                                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     NEXT.JS API ROUTES                           │
+│                                                                  │
+│  /api/patients           → Patient records (in-memory store)    │
+│  /api/instant-analysis   → Pre-transcribed demo pipeline        │
+│  /api/process-audio      → Audio upload + real-time pipeline    │
+│  /api/analyze-chunk      → LLM analysis of transcript segments  │
+│  /api/speechmatics-token → Auth token for real-time client      │
+└────────────────────────────────┬────────────────────────────────┘
+                                 │
+                    ┌────────────┼────────────┐
+                    ▼            ▼            ▼
+            ┌────────────┐ ┌─────────┐ ┌───────────┐
+            │Speechmatics│ │Featherless│ │  Gemini   │
+            │  (STT)     │ │  (LLM)   │ │ (Fallback)│
+            └────────────┘ └──────────┘ └───────────┘
+```
+
+**Processing Pipeline (per audio segment):**
+
+```
+Audio → Speechmatics (transcribe + diarize) → Transcript chunk
+    → LLM Analysis (extract meds, symptoms, conditions)
+    → Cross-reference patient record (interactions, allergies)
+    → Push results to frontend via SSE
+    → Autonomous actions (update record, email, alert, refer, schedule)
+```
+
+---
+
+## Prerequisites
+
+- **Node.js** ≥ 20.x
+- **npm** ≥ 10.x
+- **Speechmatics API key** — [speechmatics.com](https://www.speechmatics.com/)
+- **Featherless API key** — [featherless.ai](https://featherless.ai/) (primary LLM)
+- **Google Gemini API key** — [ai.google.dev](https://ai.google.dev/) (fallback LLM)
+
+---
+
+## Installation
 
 ```bash
+# Clone the repository
+git clone https://github.com/AbhishekBarali/Nura.git
+cd Nura
+
 # Install dependencies
 npm install
 
-# Seed the database with demo patients
-npm run seed
+# Copy environment template
+cp .env.example .env.local
 
-# Add your API keys to .env.local
-# (see .env.example for required keys)
+# Fill in your API keys in .env.local (see Configuration below)
 
-# Run development server
+# Start the development server
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-## Two Demo Modes
+---
 
-**⚡ Instant Demo** — Pre-recorded scenarios that show the full agent pipeline in 3-4 seconds. Cards cascade in with staggered animations. Perfect for the website demo where judges expect immediate results.
+## Configuration
 
-**🎙️ Live Mic** — Speak into your microphone and the agent analyzes your speech in real-time. Use this in the demo video to prove it actually works live, not pre-baked.
+Create a `.env.local` file in the project root (use `.env.example` as a template):
 
-## How It Works
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `SPEECHMATICS_API_KEY` | Yes | — | API key for Speechmatics real-time transcription |
+| `GEMINI_API_KEY` | Yes | — | Google Gemini API key (fallback LLM) |
+| `GEMINI_MODEL_NAME` | No | `gemini-2.0-flash` | Gemini model identifier |
+| `FEATHERLESS_API_KEY` | Yes | — | Featherless AI API key (primary LLM) |
+| `FEATHERLESS_MODEL_NAME` | No | `Qwen/Qwen2.5-7B-Instruct` | Model served by Featherless |
+| `FEATHERLESS_BASE_URL` | No | `https://api.featherless.ai/v1` | Featherless OpenAI-compatible endpoint |
+| `LLM_PROVIDER` | No | `gemini` | Primary provider: `gemini` or `featherless` |
 
-1. **Select a patient** from the dropdown (pre-loaded with 3 demo patients)
-2. **Choose a demo scenario** (Drug Interaction, Allergy Conflict, or Urgent Finding)
-3. **Press "Analyze Instantly"** — the agent does everything else autonomously
+**Example `.env.local`:**
 
-The agent will:
-- Transcribe the conversation (simulated for instant mode, real-time via Web Speech API for live mode)
-- Detect medications, symptoms, and conditions mentioned
-- Cross-reference against patient records for drug interactions
-- Flag allergy conflicts
-- Identify urgent findings requiring referral
-- Generate a complete SOAP note
+```env
+SPEECHMATICS_API_KEY=your_speechmatics_key
+GEMINI_API_KEY=your_gemini_key
+GEMINI_MODEL_NAME=gemini-2.0-flash
+FEATHERLESS_API_KEY=your_featherless_key
+FEATHERLESS_MODEL_NAME=google/gemma-4-31B-it
+FEATHERLESS_BASE_URL=https://api.featherless.ai/v1
+LLM_PROVIDER=featherless
+```
+
+---
+
+## Usage
+
+### Instant Demo Mode
+
+1. Navigate to `/demo`
+2. Select a patient from the dropdown (3 pre-loaded demo patients)
+3. Choose a demo scenario (Drug Interaction, Allergy Conflict, or Urgent Finding)
+4. Click **"Analyze Instantly"** — results cascade in with staggered animations in 3–4 seconds
+
+### Live Microphone Mode
+
+1. Navigate to `/demo` and switch to **Live** mode
+2. Select a patient
+3. Click the microphone button to begin recording
+4. Speak naturally — the agent analyzes your speech in real-time via the Web Speech API
+5. Results appear as the conversation progresses
+
+---
+
+## Available Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start the Next.js development server (hot reload) |
+| `npm run build` | Create an optimized production build |
+| `npm run start` | Run the production build |
+| `npm run lint` | Run ESLint across the codebase |
+
+---
+
+## Project Structure
+
+```
+Nura/
+├── app/
+│   ├── api/
+│   │   ├── analyze-chunk/      # LLM analysis endpoint
+│   │   ├── instant-analysis/   # Pre-transcribed demo pipeline
+│   │   ├── patients/           # Patient CRUD endpoint
+│   │   ├── process-audio/      # Audio upload + real-time pipeline
+│   │   └── speechmatics-token/ # Speechmatics auth token endpoint
+│   ├── demo/
+│   │   └── page.tsx            # Main demo interface
+│   ├── globals.css             # Global styles + CSS variables
+│   ├── layout.tsx              # Root layout (fonts, metadata)
+│   └── page.tsx                # Landing page
+├── components/
+│   ├── AgentActions.tsx        # Real-time action cards panel
+│   ├── AgentLog.tsx            # Autonomous decision log
+│   ├── AppointmentCalendar.tsx # Follow-up scheduling UI
+│   ├── AudioInput.tsx          # Audio file input handler
+│   ├── AudioPlayer.tsx         # Playback controls
+│   ├── AudioSourcePicker.tsx   # Demo/upload/live mode selector
+│   ├── CompleteReport.tsx      # SOAP note modal
+│   ├── Header.tsx              # App header
+│   ├── LiveMic.tsx             # Microphone recording component
+│   ├── LiveTranscript.tsx      # Color-coded transcript display
+│   ├── Onboarding.tsx          # First-use onboarding flow
+│   ├── PatientSelector.tsx     # Patient dropdown
+│   └── Toast.tsx               # Notification toasts
+├── lib/
+│   ├── db.ts                   # In-memory patient data store
+│   ├── drug-interactions.ts    # Drug interaction reference data
+│   ├── llm.ts                  # LLM client (Featherless + Gemini)
+│   ├── prompts.ts              # System prompts for clinical analysis
+│   ├── speechmatics.ts         # Demo transcripts + Speechmatics config
+│   └── types.ts                # TypeScript interfaces
+├── public/
+│   └── audio/                  # Pre-recorded demo audio files
+├── Audio/                      # Source audio assets
+├── types/
+│   └── speech.d.ts             # Web Speech API type declarations
+├── .env.example                # Environment variable template
+├── next.config.js              # Next.js configuration
+├── tailwind.config.ts          # Tailwind CSS configuration
+├── tsconfig.json               # TypeScript configuration
+└── package.json                # Dependencies and scripts
+```
+
+---
+
+## API Reference
+
+### `GET /api/patients`
+
+Returns all demo patients.
+
+**Response:**
+```json
+[
+  {
+    "id": 1,
+    "name": "Mrs. Sarah Chen",
+    "age": 67,
+    "gender": "Female",
+    "allergies": ["Penicillin"],
+    "current_medications": [{ "name": "Lisinopril", "dosage": "10mg", "frequency": "daily" }],
+    "conditions": ["Hypertension", "Type 2 Diabetes"]
+  }
+]
+```
+
+### `POST /api/instant-analysis`
+
+Runs the full autonomous pipeline on a pre-transcribed demo scenario.
+
+**Request Body:**
+```json
+{ "demoId": 1, "patientId": 1 }
+```
+
+**Response:** Server-Sent Events stream with `transcript`, `action`, `alert`, `summary`, and `complete` events.
+
+### `POST /api/process-audio`
+
+Processes uploaded audio through the real-time pipeline.
+
+**Request:** `multipart/form-data` with `audio` file and `patientId` field.
+
+**Response:** SSE stream of analysis results.
+
+### `POST /api/analyze-chunk`
+
+Sends a transcript segment to the LLM for clinical analysis.
+
+**Request Body:**
+```json
+{ "transcript": "...", "patientId": 1 }
+```
+
+**Response:**
+```json
+{
+  "medications_detected": [],
+  "symptoms": [],
+  "conditions": [],
+  "alerts": [],
+  "referrals": [],
+  "record_updates": [],
+  "summary_addition": ""
+}
+```
+
+### `GET /api/speechmatics-token`
+
+Returns a short-lived authentication token for the Speechmatics real-time client.
+
+---
 
 ## Demo Scenarios
 
-| # | Scenario | What Happens |
-|---|----------|-------------|
-| 1 | Drug Interaction | Patient on Lisinopril mentions taking Ibuprofen → kidney risk alert |
-| 2 | Allergy Conflict | Doctor prescribes Bactrim (sulfa drug) to sulfa-allergic patient → allergy alert |
-| 3 | Urgent Finding | Patient describes chest tightness + arm tingling → cardiology referral |
+| # | Scenario | Patient | What the Agent Detects |
+|---|----------|---------|------------------------|
+| 1 | Drug Interaction | Mrs. Sarah Chen (67F) | Ibuprofen + Lisinopril → kidney risk alert |
+| 2 | Allergy Conflict | Mr. James Wilson (45M) | Bactrim (sulfa drug) prescribed to sulfa-allergic patient |
+| 3 | Urgent Finding | Ms. Maria Rodriguez (52F) | Chest tightness + arm tingling → cardiology referral |
+
+---
+
+## Deployment
+
+### Vultr (Recommended for Hackathon)
+
+```bash
+# On a Vultr VM (Ubuntu 22.04, 2 vCPU, 4GB RAM minimum)
+# Install Node.js 20+
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# Clone and build
+git clone https://github.com/AbhishekBarali/Nura.git
+cd Nura
+npm install
+npm run build
+
+# Run with PM2
+npm install -g pm2
+pm2 start npm --name "nura" -- start
+
+# Configure Nginx reverse proxy (port 80 → 3000)
+sudo apt install nginx
+# Add proxy_pass http://localhost:3000 to your server block
+```
+
+### Vercel
+
+```bash
+# Install Vercel CLI
+npm i -g vercel
+
+# Deploy
+vercel --prod
+```
+
+Set environment variables in the Vercel dashboard under Project Settings → Environment Variables.
+
+---
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/your-feature`
+3. Commit your changes: `git commit -m "feat: add your feature"`
+4. Push to the branch: `git push origin feature/your-feature`
+5. Open a Pull Request
+
+Use [Conventional Commits](https://www.conventionalcommits.org/) for commit messages.
+
+---
+
+## License
+
+License not specified.
 
 ## Tech Stack
 
