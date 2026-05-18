@@ -35,6 +35,28 @@ const SAMPLES = [
   },
 ];
 
+// Generate unique deterministic waveform bars per sample
+function generateWaveformBars(sampleId: number, barCount: number): number[] {
+  const bars: number[] = [];
+  for (let i = 0; i < barCount; i++) {
+    // Use sample id + index to create unique patterns per sample
+    const seed = Math.sin((i + 1) * 12.9898 + sampleId * 78.233) * 43758.5453;
+    const val = Math.abs(seed - Math.floor(seed));
+    // Create more natural audio-looking pattern with varying heights
+    const envelope = Math.sin((i / barCount) * Math.PI) * 0.3 + 0.7;
+    const noise = val * 0.6 + 0.25;
+    bars.push(noise * envelope);
+  }
+  return bars;
+}
+
+// Pre-generate waveforms for each sample so they look different
+const SAMPLE_WAVEFORMS: Record<number, number[]> = {
+  1: generateWaveformBars(1, 50),
+  2: generateWaveformBars(2, 50),
+  3: generateWaveformBars(3, 50),
+};
+
 interface AudioSourcePickerProps {
   selectedId: number | null;
   onSelect: (id: number) => void;
@@ -56,185 +78,70 @@ export default function AudioSourcePicker({
 }: AudioSourcePickerProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animFrameRef = useRef<number>(0);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
+  const blobUrlRef = useRef<string | null>(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [audioReady, setAudioReady] = useState(false);
+  const [loadingAudio, setLoadingAudio] = useState(false);
 
   const activeSample = SAMPLES.find((s) => s.id === selectedId);
 
-  // Draw waveform visualization
-  const drawWaveform = useCallback(() => {
-    const canvas = canvasRef.current;
-    const analyser = analyserRef.current;
-    if (!canvas || !analyser) return;
+  // Load audio via fetch + blob to bypass IDM interception
+  const loadAudioBlob = useCallback(async (url: string) => {
+    setLoadingAudio(true);
+    setAudioReady(false);
 
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-    analyser.getByteTimeDomainData(dataArray);
-
-    const width = canvas.width;
-    const height = canvas.height;
-
-    ctx.clearRect(0, 0, width, height);
-
-    // Background gradient
-    const bgGrad = ctx.createLinearGradient(0, 0, width, 0);
-    bgGrad.addColorStop(0, "rgba(59, 130, 246, 0.03)");
-    bgGrad.addColorStop(0.5, "rgba(59, 130, 246, 0.06)");
-    bgGrad.addColorStop(1, "rgba(59, 130, 246, 0.03)");
-    ctx.fillStyle = bgGrad;
-    ctx.fillRect(0, 0, width, height);
-
-    // Center line
-    ctx.strokeStyle = "rgba(148, 163, 184, 0.3)";
-    ctx.lineWidth = 0.5;
-    ctx.beginPath();
-    ctx.moveTo(0, height / 2);
-    ctx.lineTo(width, height / 2);
-    ctx.stroke();
-
-    // Waveform
-    ctx.lineWidth = 2;
-    const gradient = ctx.createLinearGradient(0, 0, width, 0);
-    gradient.addColorStop(0, "#3b82f6");
-    gradient.addColorStop(0.5, "#6366f1");
-    gradient.addColorStop(1, "#3b82f6");
-    ctx.strokeStyle = gradient;
-    ctx.beginPath();
-
-    const sliceWidth = width / bufferLength;
-    let x = 0;
-
-    for (let i = 0; i < bufferLength; i++) {
-      const v = dataArray[i] / 128.0;
-      const y = (v * height) / 2;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-      x += sliceWidth;
+    // Revoke previous blob URL
+    if (blobUrlRef.current) {
+      URL.revokeObjectURL(blobUrlRef.current);
+      blobUrlRef.current = null;
     }
 
-    ctx.lineTo(width, height / 2);
-    ctx.stroke();
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      blobUrlRef.current = blobUrl;
 
-    // Glow effect
-    ctx.shadowColor = "#3b82f6";
-    ctx.shadowBlur = 4;
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-
-    animFrameRef.current = requestAnimationFrame(drawWaveform);
-  }, []);
-
-  // Draw static waveform bars when not playing
-  const drawStaticWaveform = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const width = canvas.width;
-    const height = canvas.height;
-    ctx.clearRect(0, 0, width, height);
-
-    // Background
-    const bgGrad = ctx.createLinearGradient(0, 0, width, 0);
-    bgGrad.addColorStop(0, "rgba(59, 130, 246, 0.02)");
-    bgGrad.addColorStop(0.5, "rgba(59, 130, 246, 0.04)");
-    bgGrad.addColorStop(1, "rgba(59, 130, 246, 0.02)");
-    ctx.fillStyle = bgGrad;
-    ctx.fillRect(0, 0, width, height);
-
-    // Static bars
-    const barCount = 60;
-    const barWidth = width / barCount - 1;
-    const progress = duration > 0 ? currentTime / duration : 0;
-
-    for (let i = 0; i < barCount; i++) {
-      const barProgress = i / barCount;
-      // Generate pseudo-random heights that look like audio
-      const seed = Math.sin(i * 12.9898 + 78.233) * 43758.5453;
-      const h = (Math.abs(seed - Math.floor(seed)) * 0.6 + 0.2) * height * 0.8;
-
-      const x = i * (barWidth + 1);
-      const y = (height - h) / 2;
-
-      if (barProgress <= progress) {
-        ctx.fillStyle = "rgba(59, 130, 246, 0.8)";
-      } else {
-        ctx.fillStyle = "rgba(148, 163, 184, 0.3)";
+      if (audioRef.current) {
+        audioRef.current.src = blobUrl;
+        audioRef.current.load();
       }
-      ctx.fillRect(x, y, barWidth, h);
+    } catch {
+      setLoadingAudio(false);
     }
-  }, [currentTime, duration]);
-
-  // Setup audio context for visualization
-  const setupAudioContext = useCallback(() => {
-    if (!audioRef.current || audioCtxRef.current) return;
-
-    const audioCtx = new AudioContext();
-    const analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 256;
-
-    const source = audioCtx.createMediaElementSource(audioRef.current);
-    source.connect(analyser);
-    analyser.connect(audioCtx.destination);
-
-    audioCtxRef.current = audioCtx;
-    analyserRef.current = analyser;
-    sourceRef.current = source;
   }, []);
 
   // Handle play/pause
   const togglePlayback = useCallback(() => {
-    if (!audioRef.current || !activeSample) return;
-
-    if (!audioCtxRef.current) {
-      setupAudioContext();
-    }
+    if (!audioRef.current || !audioReady) return;
 
     if (isPlaying) {
       audioRef.current.pause();
       setIsPlaying(false);
-      cancelAnimationFrame(animFrameRef.current);
     } else {
-      if (audioCtxRef.current?.state === "suspended") {
-        audioCtxRef.current.resume();
-      }
       audioRef.current.play().catch(() => {});
       setIsPlaying(true);
-      drawWaveform();
     }
-  }, [isPlaying, activeSample, setupAudioContext, drawWaveform]);
+  }, [isPlaying, audioReady]);
 
-  // Handle seek — works while playing, no need to pause
-  const handleSeek = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!audioRef.current || !canvasRef.current || !duration) return;
-    const rect = canvasRef.current.getBoundingClientRect();
+  // Handle seek on waveform bar click
+  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!audioRef.current || !duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const seekTime = (x / rect.width) * duration;
     audioRef.current.currentTime = seekTime;
     setCurrentTime(seekTime);
-    // If not already playing, start playback from seek position
     if (!isPlaying) {
-      if (!audioCtxRef.current) setupAudioContext();
-      if (audioCtxRef.current?.state === "suspended") audioCtxRef.current.resume();
       audioRef.current.play().catch(() => {});
       setIsPlaying(true);
-      drawWaveform();
     }
   };
 
-  // Update time
+  // Audio events
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -243,61 +150,57 @@ export default function AudioSourcePicker({
     const onLoadedMetadata = () => {
       setDuration(audio.duration);
       setAudioReady(true);
+      setLoadingAudio(false);
     };
     const onEnded = () => {
       setIsPlaying(false);
-      cancelAnimationFrame(animFrameRef.current);
+      setCurrentTime(0);
     };
+    const onError = () => setLoadingAudio(false);
 
     audio.addEventListener("timeupdate", onTimeUpdate);
     audio.addEventListener("loadedmetadata", onLoadedMetadata);
     audio.addEventListener("ended", onEnded);
+    audio.addEventListener("error", onError);
 
     return () => {
       audio.removeEventListener("timeupdate", onTimeUpdate);
       audio.removeEventListener("loadedmetadata", onLoadedMetadata);
       audio.removeEventListener("ended", onEnded);
+      audio.removeEventListener("error", onError);
     };
   }, []);
 
   // Load audio when selection changes
   useEffect(() => {
-    if (!audioRef.current || !activeSample) return;
-    const wasPlaying = isPlaying;
-    if (wasPlaying) {
+    if (!activeSample) return;
+    if (isPlaying && audioRef.current) {
       audioRef.current.pause();
       setIsPlaying(false);
-      cancelAnimationFrame(animFrameRef.current);
     }
-    audioRef.current.src = activeSample.audioFile;
-    audioRef.current.load();
     setCurrentTime(0);
     setAudioReady(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    loadAudioBlob(activeSample.audioFile);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
-  // Draw static waveform when not playing
-  useEffect(() => {
-    if (!isPlaying) {
-      drawStaticWaveform();
-    }
-  }, [isPlaying, currentTime, duration, drawStaticWaveform]);
-
-  // Cleanup
+  // Cleanup blob URLs on unmount
   useEffect(() => {
     return () => {
-      cancelAnimationFrame(animFrameRef.current);
-      if (audioCtxRef.current) {
-        audioCtxRef.current.close();
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
       }
     };
   }, []);
 
   const formatTime = (s: number) => {
+    if (!s || !isFinite(s)) return "0:00";
     const m = Math.floor(s / 60);
     const sec = Math.floor(s % 60);
     return `${m}:${sec.toString().padStart(2, "0")}`;
   };
+
+  const progress = duration > 0 ? currentTime / duration : 0;
 
   const accentColors: Record<string, string> = {
     rose: "border-rose-400 bg-rose-50",
@@ -315,51 +218,70 @@ export default function AudioSourcePicker({
           </svg>
         </div>
         <div>
-          <h3 className="text-sm font-semibold text-[var(--text-primary)]">Select Audio</h3>
-          <p className="text-[10px] text-[var(--text-muted)]">Clinical recordings — transcribed & analyzed live</p>
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">Clinical Audio Samples</h3>
+          <p className="text-[10px] text-[var(--text-muted)]">Real consultation recordings — transcribed & analyzed live</p>
         </div>
       </div>
 
-      {/* Audio element (hidden) */}
-      <audio ref={audioRef} preload="metadata" crossOrigin="anonymous" />
+      {/* Hidden audio element — blob src set programmatically */}
+      <audio ref={audioRef} preload="auto" />
 
       {/* Sample Cards */}
       <div className="space-y-2">
-        {SAMPLES.map((sample) => (
-          <button
-            key={sample.id}
-            onClick={() => onSelect(sample.id)}
-            disabled={isProcessing}
-            className={`w-full text-left px-3 py-2.5 rounded-lg border-l-[3px] border transition-all text-sm group ${
-              selectedId === sample.id
-                ? `${accentColors[sample.accent]} ring-1 ring-blue-200 shadow-sm`
-                : "border-l-transparent border-[var(--border-subtle)] hover:border-l-blue-300 hover:bg-slate-50"
-            } ${isProcessing ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex-1 min-w-0">
-                <span className="font-semibold text-[var(--text-primary)] text-[13px] leading-tight block">{sample.name}</span>
-                <span className="text-[11px] text-[var(--text-muted)] mt-0.5 block truncate">{sample.patient}</span>
-              </div>
-              {selectedId === sample.id && (
-                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center">
-                  <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
-                  </svg>
-                </span>
-              )}
-            </div>
-            {selectedId === sample.id && (
-              <div className="mt-1.5 flex flex-wrap gap-1">
-                {sample.tags.map((tag) => (
-                  <span key={tag} className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-white/80 text-slate-600 border border-slate-200">
-                    {tag}
+        {SAMPLES.map((sample) => {
+          const isActive = selectedId === sample.id;
+          const bars = SAMPLE_WAVEFORMS[sample.id];
+
+          return (
+            <button
+              key={sample.id}
+              onClick={() => onSelect(sample.id)}
+              disabled={isProcessing}
+              className={`w-full text-left px-3 py-2.5 rounded-lg border-l-[3px] border transition-all text-sm group ${
+                isActive
+                  ? `${accentColors[sample.accent]} ring-1 ring-blue-200 shadow-sm`
+                  : "border-l-transparent border-[var(--border-subtle)] hover:border-l-blue-300 hover:bg-slate-50"
+              } ${isProcessing ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <span className="font-semibold text-[var(--text-primary)] text-[13px] leading-tight block">{sample.name}</span>
+                  <span className="text-[11px] text-[var(--text-muted)] mt-0.5 block truncate">{sample.patient}</span>
+                </div>
+                {isActive && (
+                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center">
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                    </svg>
                   </span>
+                )}
+              </div>
+
+              {/* Mini waveform preview — unique per sample */}
+              <div className="mt-2 flex items-end gap-[1px] h-5 opacity-60">
+                {bars.map((h, i) => (
+                  <div
+                    key={i}
+                    className={`flex-1 rounded-sm transition-colors ${
+                      isActive ? "bg-blue-500/70" : "bg-slate-300"
+                    }`}
+                    style={{ height: `${h * 100}%` }}
+                  />
                 ))}
               </div>
-            )}
-          </button>
-        ))}
+
+              {isActive && (
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  {sample.tags.map((tag) => (
+                    <span key={tag} className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-white/80 text-slate-600 border border-slate-200">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Waveform Player — shows when a sample is selected */}
@@ -377,7 +299,7 @@ export default function AudioSourcePicker({
                 </span>
               )}
               <span className="text-[10px] font-medium text-slate-400 uppercase tracking-[0.08em]">
-                {isPlaying ? "Now Playing" : "Ready"}
+                {loadingAudio ? "Loading…" : isPlaying ? "Now Playing" : "Ready"}
               </span>
             </div>
             <span className="text-[10px] text-slate-500 font-mono">
@@ -385,23 +307,45 @@ export default function AudioSourcePicker({
             </span>
           </div>
 
-          {/* Waveform canvas */}
-          <canvas
-            ref={canvasRef}
-            width={400}
-            height={50}
-            className="w-full h-[50px] rounded-lg cursor-pointer"
+          {/* Waveform bars — interactive, unique per sample */}
+          <div
+            className="relative h-[50px] flex items-end gap-[1px] cursor-pointer rounded-lg overflow-hidden px-1"
             onClick={handleSeek}
-          />
+          >
+            {SAMPLE_WAVEFORMS[activeSample.id].map((h, i) => {
+              const barProgress = i / SAMPLE_WAVEFORMS[activeSample.id].length;
+              const isPast = barProgress <= progress;
+
+              return (
+                <div
+                  key={i}
+                  className="flex-1 rounded-sm transition-all duration-75"
+                  style={{
+                    height: `${h * 100}%`,
+                    backgroundColor: isPast ? "rgba(59, 130, 246, 0.85)" : "rgba(148, 163, 184, 0.3)",
+                    boxShadow: isPast ? "0 0 3px rgba(59, 130, 246, 0.4)" : "none",
+                  }}
+                />
+              );
+            })}
+
+            {/* Progress indicator line */}
+            <div
+              className="absolute top-0 bottom-0 w-[2px] bg-white/80 rounded-full shadow-sm transition-all duration-100"
+              style={{ left: `${progress * 100}%` }}
+            />
+          </div>
 
           {/* Controls */}
           <div className="flex items-center justify-between">
             <button
               onClick={togglePlayback}
-              disabled={!audioReady}
+              disabled={!audioReady && !loadingAudio}
               className="w-8 h-8 rounded-full bg-blue-600 hover:bg-blue-500 flex items-center justify-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-md"
             >
-              {isPlaying ? (
+              {loadingAudio ? (
+                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : isPlaying ? (
                 <svg className="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
                 </svg>
