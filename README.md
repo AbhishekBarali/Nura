@@ -344,7 +344,7 @@ Returns a short-lived authentication token for the Speechmatics real-time client
 
 ## Deployment
 
-### Vultr (Recommended for Hackathon)
+### Vultr 
 
 ```bash
 # On a Vultr VM (Ubuntu 22.04, 2 vCPU, 4GB RAM minimum)
