@@ -100,6 +100,28 @@ export default function Home() {
 
   // Staggered animation no longer needed — real-time SSE streaming handles display
 
+  // Infer the correct department from detected conditions using keyword matching
+  const inferDepartmentFromConditions = (conditionActions: ActionCard[]): string => {
+    const text = conditionActions.map(c => {
+      const content = c.content as Record<string, string>;
+      return `${content?.name || ""} ${content?.description || ""}`.toLowerCase();
+    }).join(" ");
+
+    if (text.match(/heart|cardio|chest|coronary|angina|arrhythmia|hypertension|blood pressure/)) return "Cardiology";
+    if (text.match(/kidney|renal|nephro|urinary|uti|creatinine/)) return "Nephrology";
+    if (text.match(/neuro|headache|migraine|seizure|stroke|dizziness|neuropathy/)) return "Neurology";
+    if (text.match(/diabetes|thyroid|endocrine|insulin|glucose|hba1c/)) return "Endocrinology";
+    if (text.match(/lung|pulmonary|respiratory|asthma|copd|breathe|dyspnea/)) return "Pulmonology";
+    if (text.match(/bone|joint|ortho|fracture|arthritis|back pain|spine/)) return "Orthopedics";
+    if (text.match(/cancer|oncol|tumor|malignan|chemo/)) return "Oncology";
+    if (text.match(/skin|derma|rash|eczema|psoriasis/)) return "Dermatology";
+    if (text.match(/mental|psych|depression|anxiety|bipolar/)) return "Psychiatry";
+    if (text.match(/stomach|gastro|bowel|liver|hepat|gi|reflux|gerd/)) return "Gastroenterology";
+    if (text.match(/allergy|immune|anaphylax/)) return "Allergy & Immunology";
+    if (text.match(/infection|fever|sepsis/)) return "Infectious Disease";
+    return "Primary Care";
+  };
+
   // Mock clinic schedule for appointment booking simulation
   const getAppointmentResult = (department: string, patientName: string): { text: string; appointment: BookedAppointment } => {
     const today = new Date();
@@ -174,12 +196,18 @@ export default function Home() {
       }, t - 200);
     }
 
-    // Step 2: Send SOAP report email
+    // Step 2: Send SOAP report email — route to correct department based on findings
+    const soapDepartment = hasReferrals
+      ? ((referrals[0]?.content as Record<string, string>)?.department || "Primary Care")
+      : conditions.length > 0
+        ? inferDepartmentFromConditions(conditions)
+        : "Primary Care";
+    const soapEmail = `${soapDepartment.toLowerCase().replace(/[\s&]+/g, "-")}@clinic.org`;
     steps.push({
-      entry: { timestamp: Date.now(), action: "Sending SOAP Report", icon: "envelope", detail: `Emailing encounter report to primary care team`, status: "running", color: "text-blue-400" },
+      entry: { timestamp: Date.now(), action: "Sending SOAP Report", icon: "envelope", detail: `Routing encounter report to ${soapDepartment}`, status: "running", color: "text-blue-400" },
       startDelay: t,
       doneDelay: t + 1300,
-      doneUpdate: { status: "sent", detail: `SOAP note sent to primarycare@clinic.org for ${patientName}` },
+      doneUpdate: { status: "sent", detail: `SOAP note sent to ${soapEmail} for ${patientName}` },
     });
     t += 1600;
 
@@ -215,15 +243,18 @@ export default function Home() {
     });
     t += 2500;
 
-    // Step 6: Email to sub-department
+    // Step 6: Email to sub-department — intelligently route based on clinical context
     const targetDept = hasReferrals
       ? ((referrals[0]?.content as Record<string, string>)?.department || "Specialist Dept")
-      : "Primary Care";
+      : conditions.length > 0
+        ? inferDepartmentFromConditions(conditions)
+        : "Primary Care";
+    const targetEmail = `${targetDept.toLowerCase().replace(/[\s&]+/g, "-")}@clinic.org`;
     steps.push({
-      entry: { timestamp: Date.now(), action: "Routing to Department", icon: "send", detail: `Sending records to ${targetDept}`, status: "running", color: "text-violet-400" },
+      entry: { timestamp: Date.now(), action: "Routing to Department", icon: "send", detail: `Sending records to ${targetDept} department`, status: "running", color: "text-violet-400" },
       startDelay: t,
       doneDelay: t + 1200,
-      doneUpdate: { status: "sent", detail: `Full report emailed to ${targetDept.toLowerCase().replace(/\s/g, "")}@clinic.org` },
+      doneUpdate: { status: "sent", detail: `Full report emailed to ${targetEmail}` },
     });
     t += 1500;
 
@@ -268,98 +299,10 @@ export default function Home() {
     });
   }, [clearAllTimers, safeTimeout]);
 
-  // === PRE-COMPUTED INSTANT DEMO — fast results for hackathon judges ===
-  const runPrecomputedDemo = useCallback(async () => {
-    setIsProcessing(true);
-    setTranscriptLines([]);
-    setActions([]);
-    setSummary("");
-    setReport(null);
-    setShowReport(false);
-    setCurrentTime(0);
-    setInstantComplete(false);
-    setAgentLog([]);
-    setAgentActive(false);
-    setLiveRecordUpdates([]);
-    setUploadStatus("Running instant demo...");
-    setSelectedDemo(1);
-
-    try {
-      const res = await fetch("/api/instant-analysis", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ demoId: 1 }),
-      });
-      if (!res.ok) throw new Error("Demo failed");
-      const data = await res.json();
-
-      if (data.patient) setSelectedPatient(data.patient);
-      setDuration(data.duration || 60);
-
-      const lines: TranscriptLine[] = data.transcript || [];
-      const acts: ActionCard[] = data.actions || [];
-
-      // Staggered reveal of transcript lines (looks live to judges)
-      let lineIdx = 0;
-      const lineInterval = setInterval(() => {
-        if (lineIdx < lines.length) {
-          const batch = lines.slice(lineIdx, lineIdx + 2);
-          setTranscriptLines(prev => [...prev, ...batch]);
-          setCurrentTime(batch[batch.length - 1]?.timestamp || 0);
-          lineIdx += 2;
-        } else {
-          clearInterval(lineInterval);
-        }
-      }, 120);
-
-      // Staggered reveal of actions
-      let actIdx = 0;
-      const actDelay = Math.max(200, (lines.length * 120) / (acts.length || 1));
-      const actInterval = setInterval(() => {
-        if (actIdx < acts.length) {
-          setActions(prev => [...prev, acts[actIdx]]);
-          actIdx++;
-        } else {
-          clearInterval(actInterval);
-        }
-      }, actDelay);
-
-      // After all lines revealed, finalize
-      const totalTime = lines.length * 60 + 800;
-      safeTimeout(() => {
-        setTranscriptLines(lines);
-        setActions(acts);
-        setSummary(data.summary || "");
-        setReport({
-          soap_note: data.soap_note,
-          actions: acts,
-          record_changes: [],
-          time_saved: data.time_saved || "12 minutes",
-          total_actions: data.total_actions || acts.length,
-        });
-        setIsProcessing(false);
-        setInstantComplete(true);
-        setUploadStatus("");
-        triggerAgentAutonomousActions(
-          acts,
-          data.patient?.name || "Patient",
-          data.soap_note || { subjective: "", assessment: "" }
-        );
-      }, totalTime);
-    } catch (err) {
-      console.error("Precomputed demo error:", err);
-      setUploadStatus("Demo failed — try selecting a sample manually");
-      setIsProcessing(false);
-    }
-  }, [triggerAgentAutonomousActions, safeTimeout]);
-
-  // Auto-start pre-computed demo after onboarding — instant results for judges
+  // After onboarding, just mark ready — user chooses what to demo
   useEffect(() => {
     if (onboardingComplete && !autoPlayed) {
       setAutoPlayed(true);
-      safeTimeout(() => {
-        runPrecomputedDemo();
-      }, 600);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onboardingComplete]);

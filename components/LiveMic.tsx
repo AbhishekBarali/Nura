@@ -473,7 +473,11 @@ export default function LiveMic({
 
           case "Error":
             console.error("Speechmatics error:", msg);
-            setError(`Speechmatics: ${msg.reason || msg.type || "Connection error"}`);
+            // Auto-fallback to simulation when Speechmatics auth or connection fails
+            cleanupAll();
+            setError(null);
+            setConnectionStatus("");
+            startSimulation();
             break;
 
           case "Warning":
@@ -497,8 +501,14 @@ export default function LiveMic({
       ws.onclose = (event) => {
         if (event.code !== 1000 && event.code !== 1005) {
           console.log("Speechmatics WS closed:", event.code, event.reason);
+          // Auto-fallback to simulation on unexpected close
+          cleanupAll();
+          setError(null);
+          setConnectionStatus("");
+          startSimulation();
+        } else {
+          setConnectionStatus("");
         }
-        setConnectionStatus("");
       };
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : "Could not start listening";

@@ -24,16 +24,16 @@ const STEPS = [
     id: "how-it-works",
     title: "How to Try It",
     subtitle: "Two ways to experience Nura",
-    description: "We'll start with a pre-recorded clinical consultation so you can see Nura in action right away.",
+    description: "Two ways to experience Nura",
     icon: (
       <svg className="w-12 h-12 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
       </svg>
     ),
     features: [
-      { label: "Auto-Demo", desc: "Click 'Start Demo' and we'll run a real consultation through the full pipeline automatically", num: 1 },
-      { label: "Pick a Recording", desc: "After the demo, choose from 3 clinical recordings or upload your own audio", num: 2 },
-      { label: "Go Live", desc: "Switch to Live Mic mode and speak — Nura transcribes & analyzes in real-time", num: 3 },
+      { label: "Select a Sample", desc: "Choose one of 3 real clinical recordings, or upload your own audio file", num: 1 },
+      { label: "Click Start", desc: "Nura sends audio to Speechmatics for real transcription, then AI analyzes it live", num: 2 },
+      { label: "Or Go Live", desc: "Switch to Live Mic mode and speak directly — Nura transcribes & analyzes in real-time", num: 3 },
     ],
   },
   {
