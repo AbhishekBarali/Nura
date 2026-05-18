@@ -114,26 +114,26 @@ export default function AgentActions({ actions = [], summary, isProcessing }: Ag
             </span>
           )}
           {conditions.length > 0 && (
-            <span className="text-[10px] font-semibold text-purple-700 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+            <span className="text-[10px] font-semibold text-slate-600 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
               {conditions.length} dx
             </span>
           )}
           {medications.length > 0 && (
             <span className="text-[10px] font-semibold text-blue-700 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />
               {medications.length} med{medications.length > 1 ? "s" : ""}
             </span>
           )}
           {symptoms.length > 0 && (
-            <span className="text-[10px] font-semibold text-amber-700 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+            <span className="text-[10px] font-semibold text-slate-600 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
               {symptoms.length} sx
             </span>
           )}
           {referrals.length > 0 && (
-            <span className="text-[10px] font-semibold text-emerald-700 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            <span className="text-[10px] font-semibold text-slate-600 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
               {referrals.length} ref
             </span>
           )}

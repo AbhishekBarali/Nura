@@ -73,15 +73,15 @@ export default function AppointmentCalendar({ appointments, compact = false }: C
           isSelected
             ? "bg-blue-700 text-white shadow-sm"
             : hasAppointment
-            ? "bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 cursor-pointer"
+            ? "bg-blue-50 text-blue-800 border border-blue-200 hover:bg-blue-100 cursor-pointer"
             : isToday
-            ? "bg-blue-50 text-blue-700 border border-blue-200"
+            ? "bg-slate-100 text-slate-700 border border-slate-200"
             : "text-slate-600 hover:bg-slate-50"
         }`}
       >
         {day}
         {hasAppointment && !isSelected && (
-          <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-emerald-500" />
+          <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-blue-600" />
         )}
       </button>
     );
@@ -98,7 +98,7 @@ export default function AppointmentCalendar({ appointments, compact = false }: C
           <h3 className="text-sm font-semibold text-[var(--text-primary)]">Clinic Schedule</h3>
         </div>
         {appointments.length > 0 && (
-          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+          <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
             {appointments.length} booked
           </span>
         )}
@@ -135,21 +135,21 @@ export default function AppointmentCalendar({ appointments, compact = false }: C
 
       {/* Selected Appointment Detail */}
       {selectedAppointments.length > 0 && (
-        <div className="border-t border-[var(--border-subtle)] px-4 py-3 bg-emerald-50/50 animate-fade-in">
+        <div className="border-t border-[var(--border-subtle)] px-4 py-3 bg-blue-50/50 animate-fade-in">
           {selectedAppointments.map((apt, i) => (
             <div key={i} className="flex items-center gap-3">
-              <div className={`${compact ? "w-6 h-6" : "w-8 h-8"} rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0`}>
-                <svg className={`${compact ? "w-3 h-3" : "w-4 h-4"} text-emerald-600`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <div className={`${compact ? "w-6 h-6" : "w-8 h-8"} rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0`}>
+                <svg className={`${compact ? "w-3 h-3" : "w-4 h-4"} text-blue-700`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
               <div className="flex-1 min-w-0">
-                <p className={`${compact ? "text-xs" : "text-sm"} font-semibold text-emerald-900`}>{apt.department}</p>
-                <p className="text-[11px] text-emerald-700">
+                <p className={`${compact ? "text-xs" : "text-sm"} font-semibold text-[var(--text-primary)]`}>{apt.department}</p>
+                <p className="text-[11px] text-[var(--text-muted)]">
                   {apt.date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} at {apt.time}
                 </p>
               </div>
-              <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-full">
+              <span className="text-[9px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded-full">
                 Confirmed
               </span>
             </div>

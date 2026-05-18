@@ -6,33 +6,33 @@ interface ActionCardProps {
   action: ActionCardType;
 }
 
-const CARD_CONFIG: Record<string, { icon: string; label: string; accent: string; bg: string; border: string; dot: string }> = {
+const CARD_CONFIG: Record<string, { label: string; accent: string; bg: string; border: string; dot: string }> = {
   alert: {
-    icon: "⚠️", label: "ALERT", accent: "text-red-700", bg: "bg-red-50",
-    border: "border-red-200", dot: "bg-red-500",
+    label: "ALERT", accent: "text-red-700", bg: "bg-red-50/70",
+    border: "border-red-200/80", dot: "bg-red-500",
   },
   medication: {
-    icon: "💊", label: "MEDICATION", accent: "text-blue-700", bg: "bg-blue-50",
-    border: "border-blue-200", dot: "bg-blue-500",
+    label: "MEDICATION", accent: "text-blue-700", bg: "bg-blue-50/60",
+    border: "border-blue-200/80", dot: "bg-blue-600",
   },
   symptom: {
-    icon: "🩺", label: "SYMPTOM", accent: "text-amber-700", bg: "bg-amber-50",
-    border: "border-amber-200", dot: "bg-amber-500",
+    label: "SYMPTOM", accent: "text-amber-700", bg: "bg-amber-50/60",
+    border: "border-amber-200/80", dot: "bg-amber-500",
   },
   condition: {
-    icon: "📋", label: "DIAGNOSIS", accent: "text-purple-700", bg: "bg-purple-50",
-    border: "border-purple-200", dot: "bg-purple-500",
-  },
-  referral: {
-    icon: "🏥", label: "REFERRAL", accent: "text-emerald-700", bg: "bg-emerald-50",
-    border: "border-emerald-200", dot: "bg-emerald-500",
-  },
-  record_update: {
-    icon: "📝", label: "TREATMENT", accent: "text-slate-700", bg: "bg-slate-50",
+    label: "DIAGNOSIS", accent: "text-slate-700", bg: "bg-slate-50",
     border: "border-slate-200", dot: "bg-slate-500",
   },
+  referral: {
+    label: "REFERRAL", accent: "text-emerald-700", bg: "bg-emerald-50/60",
+    border: "border-emerald-200/80", dot: "bg-emerald-500",
+  },
+  record_update: {
+    label: "TREATMENT", accent: "text-slate-600", bg: "bg-slate-50/80",
+    border: "border-slate-200", dot: "bg-slate-400",
+  },
   summary: {
-    icon: "📄", label: "NOTE", accent: "text-slate-600", bg: "bg-slate-50",
+    label: "NOTE", accent: "text-slate-600", bg: "bg-slate-50/80",
     border: "border-slate-200", dot: "bg-slate-400",
   },
 };

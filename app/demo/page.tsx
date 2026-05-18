@@ -148,7 +148,7 @@ export default function Home() {
 
     // Step 1: Update patient record
     steps.push({
-      entry: { timestamp: Date.now(), action: "Updating Patient Record", icon: "📋", detail: `Adding ${conditions.length} condition(s), ${medications.length} medication(s) to chart`, status: "running", color: "text-cyan-400" },
+      entry: { timestamp: Date.now(), action: "Updating Patient Record", icon: "clipboard", detail: `Adding ${conditions.length} condition(s), ${medications.length} medication(s) to chart`, status: "running", color: "text-cyan-400" },
       startDelay: t,
       doneDelay: t + 1200,
       doneUpdate: { status: "done" },
@@ -176,7 +176,7 @@ export default function Home() {
 
     // Step 2: Send SOAP report email
     steps.push({
-      entry: { timestamp: Date.now(), action: "Sending SOAP Report", icon: "📧", detail: `Emailing encounter report to primary care team`, status: "running", color: "text-blue-400" },
+      entry: { timestamp: Date.now(), action: "Sending SOAP Report", icon: "envelope", detail: `Emailing encounter report to primary care team`, status: "running", color: "text-blue-400" },
       startDelay: t,
       doneDelay: t + 1300,
       doneUpdate: { status: "sent", detail: `SOAP note sent to primarycare@clinic.org for ${patientName}` },
@@ -186,7 +186,7 @@ export default function Home() {
     // Step 3: Alert care team (if alerts)
     if (hasAlerts) {
       steps.push({
-        entry: { timestamp: Date.now(), action: "Alerting Care Team", icon: "🚨", detail: `Flagging clinical alerts for immediate review`, status: "running", color: "text-rose-400" },
+        entry: { timestamp: Date.now(), action: "Alerting Care Team", icon: "alert", detail: `Flagging clinical alerts for immediate review`, status: "running", color: "text-rose-400" },
         startDelay: t,
         doneDelay: t + 1200,
         doneUpdate: { status: "sent", detail: "Alert notification sent to attending physician" },
@@ -198,7 +198,7 @@ export default function Home() {
     if (hasReferrals) {
       const refDept = (referrals[0]?.content as Record<string, string>)?.department || "Specialist";
       steps.push({
-        entry: { timestamp: Date.now(), action: "Dispatching Referral", icon: "🏥", detail: `Sending referral request to ${refDept}`, status: "running", color: "text-emerald-400" },
+        entry: { timestamp: Date.now(), action: "Dispatching Referral", icon: "building", detail: `Sending referral request to ${refDept}`, status: "running", color: "text-emerald-400" },
         startDelay: t,
         doneDelay: t + 1300,
         doneUpdate: { status: "sent", detail: `Referral sent to ${refDept} — awaiting scheduling` },
@@ -208,7 +208,7 @@ export default function Home() {
 
     // Step 5: Schedule appointment (the new feature!)
     steps.push({
-      entry: { timestamp: Date.now(), action: "Booking Appointment", icon: "📅", detail: `Checking clinic schedule for follow-up...`, status: "running", color: "text-amber-400" },
+      entry: { timestamp: Date.now(), action: "Booking Appointment", icon: "calendar", detail: `Checking clinic schedule for follow-up...`, status: "running", color: "text-amber-400" },
       startDelay: t,
       doneDelay: t + 2200,
       doneUpdate: { status: "done", detail: "" }, // will be set dynamically
@@ -220,7 +220,7 @@ export default function Home() {
       ? ((referrals[0]?.content as Record<string, string>)?.department || "Specialist Dept")
       : "Primary Care";
     steps.push({
-      entry: { timestamp: Date.now(), action: "Routing to Department", icon: "📨", detail: `Sending records to ${targetDept}`, status: "running", color: "text-violet-400" },
+      entry: { timestamp: Date.now(), action: "Routing to Department", icon: "send", detail: `Sending records to ${targetDept}`, status: "running", color: "text-violet-400" },
       startDelay: t,
       doneDelay: t + 1200,
       doneUpdate: { status: "sent", detail: `Full report emailed to ${targetDept.toLowerCase().replace(/\s/g, "")}@clinic.org` },
@@ -781,7 +781,11 @@ export default function Home() {
                       {/* Preview: Findings */}
                       <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/50 p-4 flex flex-col">
                         <div className="flex items-center gap-2 mb-3">
-                          <span className="w-5 h-5 rounded bg-red-100 flex items-center justify-center text-[9px]">⚠️</span>
+                          <span className="w-5 h-5 rounded bg-red-100 flex items-center justify-center">
+                            <svg className="w-3 h-3 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                            </svg>
+                          </span>
                           <span className="text-xs font-semibold text-slate-500">Clinical Findings</span>
                         </div>
                         <div className="space-y-2">
