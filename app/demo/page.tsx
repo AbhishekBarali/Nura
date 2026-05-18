@@ -75,12 +75,17 @@ export default function Home() {
       .catch(console.error);
   }, []);
 
-  // Auto-play removed — real transcription requires explicit user action
+  // Auto-start demo after onboarding completes — shows judges the full pipeline immediately
   useEffect(() => {
     if (onboardingComplete && !autoPlayed) {
       setAutoPlayed(true);
+      // Small delay to let UI settle, then auto-trigger sample 1
+      setTimeout(() => {
+        startInstantProcessing();
+      }, 600);
     }
-  }, [onboardingComplete, autoPlayed]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onboardingComplete]);
 
   // Staggered animation no longer needed — real-time SSE streaming handles display
 

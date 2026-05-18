@@ -31,9 +31,9 @@ const STEPS = [
       </svg>
     ),
     features: [
-      { label: "① Auto-Demo", desc: "A pre-recorded consultation plays first so you see the full pipeline in action", icon: "⚡" },
-      { label: "② Pick a Recording", desc: "Choose from 3 real clinical scenarios, each demonstrating different detections", icon: "🎧" },
-      { label: "③ Upload or Go Live", desc: "Upload your own audio (transcribed via Speechmatics) or use your mic in real-time", icon: "🎙️" },
+      { label: "① Auto-Demo", desc: "Click 'Start Demo' and we'll run a real consultation through the full pipeline automatically", icon: "⚡" },
+      { label: "② Pick a Recording", desc: "After the demo, choose from 3 clinical recordings or upload your own audio", icon: "🎧" },
+      { label: "③ Go Live", desc: "Switch to Live Mic mode and speak — Nura transcribes & analyzes in real-time", icon: "🎙️" },
     ],
   },
   {
@@ -60,13 +60,11 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   const [isVisible, setIsVisible] = useState(true);
   const dialogRef = useRef<HTMLDivElement>(null);
 
+  // Always show onboarding for hackathon judges — no localStorage skip
   useEffect(() => {
-    const seen = localStorage.getItem("nura-onboarding-completed");
-    if (seen === "true") {
-      setIsVisible(false);
-      onComplete();
-    }
-  }, [onComplete]);
+    // Clear any previous session so guide always appears
+    localStorage.removeItem("nura-onboarding-completed");
+  }, []);
 
   useEffect(() => {
     if (!isVisible) return;
@@ -110,7 +108,6 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   };
 
   const handleComplete = () => {
-    localStorage.setItem("nura-onboarding-completed", "true");
     setIsVisible(false);
     onComplete();
   };
