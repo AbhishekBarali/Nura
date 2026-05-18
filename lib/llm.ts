@@ -3,14 +3,6 @@ import OpenAI from "openai";
 import { LLMAnalysisResult, Patient, SOAPNote } from "./types";
 import { getClinicalAnalysisPrompt, getSOAPNotePrompt } from "./prompts";
 
-function getGeminiClient() {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey || apiKey === "your_key_here") {
-    return null;
-  }
-  return new GoogleGenerativeAI(apiKey);
-}
-
 function getFeatherlessClient() {
   const apiKey = process.env.FEATHERLESS_API_KEY;
   if (!apiKey || apiKey === "your_key_here") {
@@ -22,7 +14,7 @@ function getFeatherlessClient() {
   });
 }
 
-function getGeminiFlashLiteClient() {
+function getGeminiClient() {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey || apiKey === "your_key_here") {
     return null;
@@ -34,34 +26,23 @@ export async function analyzeTranscriptChunk(
   patient: Patient,
   transcript: string
 ): Promise<LLMAnalysisResult> {
-  const provider = (process.env.LLM_PROVIDER || "gemini").toLowerCase();
   const prompt = getClinicalAnalysisPrompt(patient, transcript);
 
+  // Primary: Featherless (google/gemma-4-31B-it)
   try {
-    if (provider === "gemini") {
-      return await analyzeWithGemini(prompt);
-    } else {
-      return await analyzeWithFeatherless(prompt);
-    }
+    return await analyzeWithFeatherless(prompt);
   } catch (error) {
-    console.error(`LLM analysis failed with ${provider}:`, error);
-    // Try fallback: Featherless → Gemini Flash Lite → Gemini primary (or reverse)
-    try {
-      if (provider === "gemini") {
-        return await analyzeWithFeatherless(prompt);
-      } else {
-        return await analyzeWithGemini(prompt);
-      }
-    } catch (fallbackError) {
-      console.error("First fallback failed, trying Gemini 3.1 Flash Lite:", fallbackError);
-      try {
-        return await analyzeWithGeminiFlashLite(prompt);
-      } catch (flashLiteError) {
-        console.error("All LLM providers failed:", flashLiteError);
-        return getEmptyResult();
-      }
-    }
+    console.error("Featherless failed:", error);
   }
+
+  // Fallback: Gemini 3.1 Flash Lite via Google AI Studio
+  try {
+    return await analyzeWithGeminiFlashLite(prompt);
+  } catch (fallbackError) {
+    console.error("Gemini 3.1 Flash Lite fallback failed:", fallbackError);
+  }
+
+  return getEmptyResult();
 }
 
 export async function generateSOAPNote(
@@ -69,44 +50,30 @@ export async function generateSOAPNote(
   fullTranscript: string,
   actionsDescription: string
 ): Promise<SOAPNote> {
-  const provider = (process.env.LLM_PROVIDER || "gemini").toLowerCase();
   const prompt = getSOAPNotePrompt(patient, fullTranscript, actionsDescription);
 
+  // Primary: Featherless
   try {
-    let responseText: string;
-    if (provider === "gemini") {
-      responseText = await callGemini(prompt);
-    } else {
-      responseText = await callFeatherless(prompt);
-    }
+    const responseText = await callFeatherless(prompt);
     return JSON.parse(cleanJsonResponse(responseText));
   } catch (error) {
-    console.error(`SOAP generation failed with ${provider}:`, error);
-    // Fallback chain: other primary → Gemini Flash Lite → static
-    try {
-      const fallbackText = provider === "gemini"
-        ? await callFeatherless(prompt)
-        : await callGemini(prompt);
-      return JSON.parse(cleanJsonResponse(fallbackText));
-    } catch {
-      try {
-        const flashLiteText = await callGeminiFlashLite(prompt);
-        return JSON.parse(cleanJsonResponse(flashLiteText));
-      } catch {
-        return {
-          subjective: "Patient presented with concerns discussed during encounter.",
-          objective: "See transcript for clinical details discussed.",
-          assessment: "Clinical analysis completed by Nura agent.",
-          plan: "Follow up as discussed. Review flagged interactions.",
-        };
-      }
-    }
+    console.error("SOAP generation failed with Featherless:", error);
   }
-}
 
-async function analyzeWithGemini(prompt: string): Promise<LLMAnalysisResult> {
-  const responseText = await callGemini(prompt);
-  return JSON.parse(cleanJsonResponse(responseText));
+  // Fallback: Gemini 3.1 Flash Lite
+  try {
+    const responseText = await callGeminiFlashLite(prompt);
+    return JSON.parse(cleanJsonResponse(responseText));
+  } catch (fallbackError) {
+    console.error("SOAP fallback (Gemini Flash Lite) failed:", fallbackError);
+  }
+
+  return {
+    subjective: "Patient presented with concerns discussed during encounter.",
+    objective: "See transcript for clinical details discussed.",
+    assessment: "Clinical analysis completed by Nura agent.",
+    plan: "Follow up as discussed. Review flagged interactions.",
+  };
 }
 
 async function analyzeWithFeatherless(prompt: string): Promise<LLMAnalysisResult> {
@@ -119,21 +86,6 @@ async function analyzeWithGeminiFlashLite(prompt: string): Promise<LLMAnalysisRe
   return JSON.parse(cleanJsonResponse(responseText));
 }
 
-async function callGemini(prompt: string): Promise<string> {
-  const client = getGeminiClient();
-  if (!client) {
-    throw new Error("Gemini API key not configured");
-  }
-
-  const model = client.getGenerativeModel({
-    model: process.env.GEMINI_MODEL_NAME || "gemini-2.0-flash",
-  });
-
-  const result = await model.generateContent(prompt);
-  const response = result.response;
-  return response.text();
-}
-
 async function callFeatherless(prompt: string): Promise<string> {
   const client = getFeatherlessClient();
   if (!client) {
@@ -141,7 +93,7 @@ async function callFeatherless(prompt: string): Promise<string> {
   }
 
   const response = await client.chat.completions.create({
-    model: process.env.FEATHERLESS_MODEL_NAME || "Qwen/Qwen2.5-7B-Instruct",
+    model: process.env.FEATHERLESS_MODEL_NAME || "google/gemma-4-31B-it",
     messages: [
       { role: "user", content: prompt },
     ],
@@ -153,7 +105,7 @@ async function callFeatherless(prompt: string): Promise<string> {
 }
 
 async function callGeminiFlashLite(prompt: string): Promise<string> {
-  const client = getGeminiFlashLiteClient();
+  const client = getGeminiClient();
   if (!client) {
     throw new Error("Gemini API key not configured for Flash Lite fallback");
   }
