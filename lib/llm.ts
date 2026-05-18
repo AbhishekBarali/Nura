@@ -22,6 +22,14 @@ function getFeatherlessClient() {
   });
 }
 
+function getGeminiFlashLiteClient() {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey === "your_key_here") {
+    return null;
+  }
+  return new GoogleGenerativeAI(apiKey);
+}
+
 export async function analyzeTranscriptChunk(
   patient: Patient,
   transcript: string
@@ -37,7 +45,7 @@ export async function analyzeTranscriptChunk(
     }
   } catch (error) {
     console.error(`LLM analysis failed with ${provider}:`, error);
-    // Try fallback
+    // Try fallback: Featherless → Gemini Flash Lite → Gemini primary (or reverse)
     try {
       if (provider === "gemini") {
         return await analyzeWithFeatherless(prompt);
@@ -45,8 +53,13 @@ export async function analyzeTranscriptChunk(
         return await analyzeWithGemini(prompt);
       }
     } catch (fallbackError) {
-      console.error("Fallback LLM also failed:", fallbackError);
-      return getEmptyResult();
+      console.error("First fallback failed, trying Gemini 3.1 Flash Lite:", fallbackError);
+      try {
+        return await analyzeWithGeminiFlashLite(prompt);
+      } catch (flashLiteError) {
+        console.error("All LLM providers failed:", flashLiteError);
+        return getEmptyResult();
+      }
     }
   }
 }
@@ -67,13 +80,27 @@ export async function generateSOAPNote(
       responseText = await callFeatherless(prompt);
     }
     return JSON.parse(cleanJsonResponse(responseText));
-  } catch {
-    return {
-      subjective: "Patient presented with concerns discussed during encounter.",
-      objective: "See transcript for clinical details discussed.",
-      assessment: "Clinical analysis completed by Nura agent.",
-      plan: "Follow up as discussed. Review flagged interactions.",
-    };
+  } catch (error) {
+    console.error(`SOAP generation failed with ${provider}:`, error);
+    // Fallback chain: other primary → Gemini Flash Lite → static
+    try {
+      const fallbackText = provider === "gemini"
+        ? await callFeatherless(prompt)
+        : await callGemini(prompt);
+      return JSON.parse(cleanJsonResponse(fallbackText));
+    } catch {
+      try {
+        const flashLiteText = await callGeminiFlashLite(prompt);
+        return JSON.parse(cleanJsonResponse(flashLiteText));
+      } catch {
+        return {
+          subjective: "Patient presented with concerns discussed during encounter.",
+          objective: "See transcript for clinical details discussed.",
+          assessment: "Clinical analysis completed by Nura agent.",
+          plan: "Follow up as discussed. Review flagged interactions.",
+        };
+      }
+    }
   }
 }
 
@@ -84,6 +111,11 @@ async function analyzeWithGemini(prompt: string): Promise<LLMAnalysisResult> {
 
 async function analyzeWithFeatherless(prompt: string): Promise<LLMAnalysisResult> {
   const responseText = await callFeatherless(prompt);
+  return JSON.parse(cleanJsonResponse(responseText));
+}
+
+async function analyzeWithGeminiFlashLite(prompt: string): Promise<LLMAnalysisResult> {
+  const responseText = await callGeminiFlashLite(prompt);
   return JSON.parse(cleanJsonResponse(responseText));
 }
 
@@ -118,6 +150,21 @@ async function callFeatherless(prompt: string): Promise<string> {
   });
 
   return response.choices[0]?.message?.content || "{}";
+}
+
+async function callGeminiFlashLite(prompt: string): Promise<string> {
+  const client = getGeminiFlashLiteClient();
+  if (!client) {
+    throw new Error("Gemini API key not configured for Flash Lite fallback");
+  }
+
+  const model = client.getGenerativeModel({
+    model: "gemini-3.1-flash-lite",
+  });
+
+  const result = await model.generateContent(prompt);
+  const response = result.response;
+  return response.text();
 }
 
 function cleanJsonResponse(text: string): string {
