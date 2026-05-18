@@ -117,10 +117,10 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   const step = STEPS[currentStep];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 animate-fade-in" role="dialog" aria-modal="true" aria-labelledby="onboarding-title" ref={dialogRef}>
-      <div className="relative w-full max-w-lg mx-4 bg-white rounded-2xl shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 animate-fade-in" role="dialog" aria-modal="true" aria-labelledby="onboarding-title" ref={dialogRef}>
+      <div className="relative w-full max-w-lg sm:mx-4 bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[95dvh] sm:max-h-[85vh] flex flex-col">
         {/* Progress bar */}
-        <div className="h-1 bg-slate-100">
+        <div className="h-1 bg-slate-100 flex-shrink-0">
           <div
             className="h-full bg-blue-600 transition-all duration-500 ease-out"
             style={{ width: `${((currentStep + 1) / STEPS.length) * 100}%` }}
@@ -130,41 +130,41 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
         {/* Skip button */}
         <button
           onClick={handleSkip}
-          className="absolute top-4 right-4 text-xs font-medium text-slate-400 hover:text-slate-600 transition-colors px-3 py-1.5 rounded-lg hover:bg-slate-100"
+          className="absolute top-4 right-4 z-10 text-xs font-medium text-slate-400 hover:text-slate-600 transition-colors px-3 py-1.5 rounded-lg hover:bg-slate-100"
         >
           Skip
         </button>
 
-        {/* Content */}
-        <div className="px-10 pt-12 pb-8">
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto overscroll-contain px-5 sm:px-10 pt-8 sm:pt-12 pb-4">
           {/* Icon */}
-          <div className="flex justify-center mb-6">
-            <div className="w-20 h-20 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center">
+          <div className="flex justify-center mb-4 sm:mb-6">
+            <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center [&>svg]:w-8 [&>svg]:h-8 sm:[&>svg]:w-12 sm:[&>svg]:h-12">
               {step.icon}
             </div>
           </div>
 
           {/* Text */}
-          <div className="text-center mb-8">
-            <h2 id="onboarding-title" className="text-[1.75rem] font-display font-bold text-slate-900 mb-1.5 leading-tight">{step.title}</h2>
-            <p className="text-base font-medium text-blue-600 mb-4">{step.subtitle}</p>
-            <p className="text-[15px] text-slate-600 leading-relaxed max-w-sm mx-auto">{step.description}</p>
+          <div className="text-center mb-5 sm:mb-8">
+            <h2 id="onboarding-title" className="text-xl sm:text-[1.75rem] font-display font-bold text-slate-900 mb-1.5 leading-tight">{step.title}</h2>
+            <p className="text-sm sm:text-base font-medium text-blue-600 mb-3 sm:mb-4">{step.subtitle}</p>
+            <p className="text-sm sm:text-[15px] text-slate-600 leading-relaxed max-w-sm mx-auto">{step.description}</p>
             {step.hint && (
-              <span className="inline-block mt-3 text-sm text-slate-400 italic">{step.hint}</span>
+              <span className="inline-block mt-2 text-xs sm:text-sm text-slate-400 italic">{step.hint}</span>
             )}
           </div>
 
           {/* Step-specific content */}
           {step.features && (
-            <div className="space-y-3 mb-8">
+            <div className="space-y-2 sm:space-y-3 mb-5 sm:mb-8">
               {step.features.map((f) => (
-                <div key={f.label} className="flex items-start gap-4 px-5 py-4 rounded-xl bg-slate-50 border border-slate-200">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 border border-blue-200 flex items-center justify-center">
-                    <span className="text-xs font-bold text-blue-700">{(f as { num?: number }).num}</span>
+                <div key={f.label} className="flex items-start gap-3 sm:gap-4 px-3 sm:px-5 py-3 sm:py-4 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-blue-100 border border-blue-200 flex items-center justify-center">
+                    <span className="text-[10px] sm:text-xs font-bold text-blue-700">{(f as { num?: number }).num}</span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[15px] font-bold text-slate-800">{f.label}</p>
-                    <p className="text-sm text-slate-500 leading-relaxed mt-0.5">{f.desc}</p>
+                    <p className="text-sm sm:text-[15px] font-bold text-slate-800">{f.label}</p>
+                    <p className="text-xs sm:text-sm text-slate-500 leading-relaxed mt-0.5">{f.desc}</p>
                   </div>
                 </div>
               ))}
@@ -172,39 +172,39 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
           )}
 
           {step.actions && (
-            <div className="grid grid-cols-2 gap-3 mb-8">
+            <div className="grid grid-cols-2 gap-2 sm:gap-3 mb-5 sm:mb-8">
               {step.actions.map((a) => (
-                <div key={a.label} className={`px-4 py-3.5 rounded-xl border ${a.color}`}>
-                  <p className="text-sm font-bold">{a.label}</p>
-                  <p className="text-xs opacity-75 mt-1 leading-relaxed">{a.desc}</p>
+                <div key={a.label} className={`px-3 sm:px-4 py-2.5 sm:py-3.5 rounded-xl border ${a.color}`}>
+                  <p className="text-xs sm:text-sm font-bold">{a.label}</p>
+                  <p className="text-[10px] sm:text-xs opacity-75 mt-0.5 sm:mt-1 leading-relaxed">{a.desc}</p>
                 </div>
               ))}
             </div>
           )}
+        </div>
 
-          {/* Navigation */}
-          <div className="flex items-center justify-between pt-2">
-            <div className="flex gap-2">
-              {STEPS.map((_, i) => (
-                <div
-                  key={i}
-                  className={`h-2.5 rounded-full transition-all duration-300 ${
-                    i === currentStep ? "bg-blue-600 w-7" : i < currentStep ? "bg-blue-300 w-2.5" : "bg-slate-200 w-2.5"
-                  }`}
-                />
-              ))}
-            </div>
-
-            <button
-              onClick={handleNext}
-              className="px-7 py-3 bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm flex items-center gap-2"
-            >
-              {currentStep === STEPS.length - 1 ? "Start Demo" : "Next"}
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-              </svg>
-            </button>
+        {/* Navigation — pinned to bottom, always visible */}
+        <div className="flex-shrink-0 flex items-center justify-between px-5 sm:px-10 py-4 border-t border-slate-100 bg-white">
+          <div className="flex gap-2">
+            {STEPS.map((_, i) => (
+              <div
+                key={i}
+                className={`h-2 sm:h-2.5 rounded-full transition-all duration-300 ${
+                  i === currentStep ? "bg-blue-600 w-6 sm:w-7" : i < currentStep ? "bg-blue-300 w-2 sm:w-2.5" : "bg-slate-200 w-2 sm:w-2.5"
+                }`}
+              />
+            ))}
           </div>
+
+          <button
+            onClick={handleNext}
+            className="px-5 sm:px-7 py-2.5 sm:py-3 bg-blue-700 hover:bg-blue-800 active:bg-blue-900 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm flex items-center gap-2 touch-manipulation"
+          >
+            {currentStep === STEPS.length - 1 ? "Start Demo" : "Next"}
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+            </svg>
+          </button>
         </div>
       </div>
     </div>
