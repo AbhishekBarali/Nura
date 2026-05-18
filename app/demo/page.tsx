@@ -69,6 +69,9 @@ export default function Home() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
+  // Track accumulated transcript text for date parsing
+  const transcriptTextRef = useRef<string>("");
+
   // Clear all pending timers (prevents memory leaks on unmount/mode switch)
   const clearAllTimers = useCallback(() => {
     timersRef.current.forEach(clearTimeout);
@@ -122,15 +125,97 @@ export default function Home() {
     return "Primary Care";
   };
 
-  // Mock clinic schedule for appointment booking simulation
-  const getAppointmentResult = (department: string, patientName: string): { text: string; appointment: BookedAppointment } => {
+  // Parse relative date expressions from transcript (e.g., "next Tuesday", "early next week")
+  const parseDateFromTranscript = (transcriptText: string): Date | null => {
     const today = new Date();
-    const dayOfWeek = today.getDay();
-    // Simulate: next 2 days are "full", then find an open slot
-    const daysUntilOpen = dayOfWeek <= 3 ? 3 : 5; // Thu or Mon
-    const appointmentDate = new Date(today);
-    appointmentDate.setDate(today.getDate() + daysUntilOpen);
+    today.setHours(0, 0, 0, 0);
+    const text = transcriptText.toLowerCase();
+
+    // Map day names to JS day numbers (0=Sun, 1=Mon, ...)
+    const dayMap: Record<string, number> = {
+      sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
+      thursday: 4, friday: 5, saturday: 6,
+    };
+
+    // Match "next [day]" or "this [day]" or just a day name in scheduling context
+    const schedulingContext = text.match(
+      /(?:let'?s?\s+(?:set|book|schedule|make)|come\s+(?:back|in)|follow[- ]?up|appointment|see\s+you)[^.]*?(next|this)?\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i
+    ) || text.match(
+      /(next|this)\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i
+    );
+
+    if (schedulingContext) {
+      const modifier = schedulingContext[1]?.toLowerCase();
+      const dayName = schedulingContext[2]?.toLowerCase();
+      const targetDay = dayMap[dayName];
+      if (targetDay !== undefined) {
+        const currentDay = today.getDay();
+        let daysAhead = targetDay - currentDay;
+        if (daysAhead <= 0 || modifier === "next") {
+          daysAhead += 7; // Always go to next week if "next" or if day already passed
+        }
+        const result = new Date(today);
+        result.setDate(today.getDate() + daysAhead);
+        return result;
+      }
+    }
+
+    // Match "early next week" → next Monday
+    if (text.match(/(?:early|beginning of)\s+next\s+week/)) {
+      const currentDay = today.getDay();
+      const daysUntilMon = ((1 - currentDay + 7) % 7) || 7;
+      const result = new Date(today);
+      result.setDate(today.getDate() + daysUntilMon);
+      return result;
+    }
+
+    // Match "later this week" / "end of this week" → this Friday
+    if (text.match(/(?:later|end of)\s+this\s+week/)) {
+      const currentDay = today.getDay();
+      const daysUntilFri = ((5 - currentDay + 7) % 7) || 7;
+      const result = new Date(today);
+      result.setDate(today.getDate() + daysUntilFri);
+      return result;
+    }
+
+    // Match "in X days/weeks"
+    const inDaysMatch = text.match(/in\s+(\d+)\s+day/i);
+    if (inDaysMatch) {
+      const result = new Date(today);
+      result.setDate(today.getDate() + parseInt(inDaysMatch[1]));
+      return result;
+    }
+    const inWeeksMatch = text.match(/in\s+(\d+|a|one|two|three)\s+week/i);
+    if (inWeeksMatch) {
+      const weekMap: Record<string, number> = { a: 1, one: 1, two: 2, three: 3 };
+      const weeks = weekMap[inWeeksMatch[1]] || parseInt(inWeeksMatch[1]) || 1;
+      const result = new Date(today);
+      result.setDate(today.getDate() + weeks * 7);
+      return result;
+    }
+
+    return null;
+  };
+
+  // Clinic schedule appointment booking — attempts to parse dates from transcript
+  const getAppointmentResult = (department: string, patientName: string, transcriptText?: string): { text: string; appointment: BookedAppointment } => {
+    const today = new Date();
+    let appointmentDate: Date;
+
+    // Try to parse a date from the transcript first
+    const parsedDate = transcriptText ? parseDateFromTranscript(transcriptText) : null;
+
+    if (parsedDate) {
+      appointmentDate = parsedDate;
+    } else {
+      // Fallback: pick next available slot
+      const dayOfWeek = today.getDay();
+      const daysUntilOpen = dayOfWeek <= 3 ? 3 : 5;
+      appointmentDate = new Date(today);
+      appointmentDate.setDate(today.getDate() + daysUntilOpen);
+    }
     appointmentDate.setHours(0, 0, 0, 0);
+
     const dayName = appointmentDate.toLocaleDateString("en-US", { weekday: "long" });
     const dateStr = appointmentDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
     const times = ["9:00 AM", "10:30 AM", "2:00 PM", "3:30 PM"];
@@ -142,7 +227,7 @@ export default function Home() {
   };
 
   // Trigger autonomous agent actions after analysis completes
-  const triggerAgentAutonomousActions = useCallback((analysisActions: ActionCard[], patientName: string, soapNote: { subjective: string; assessment: string }) => {
+  const triggerAgentAutonomousActions = useCallback((analysisActions: ActionCard[], patientName: string, soapNote: { subjective: string; assessment: string }, transcriptText?: string) => {
     clearAllTimers();
     setAgentActive(true);
     setAgentLog([]);
@@ -281,7 +366,7 @@ export default function Home() {
         if (entry) {
           // Special handling for appointment booking — simulate schedule check
           if (step.entry.action === "Booking Appointment") {
-            const result = getAppointmentResult(hasReferrals ? targetDept : "Follow-up", patientName);
+            const result = getAppointmentResult(hasReferrals ? targetDept : "Follow-up", patientName, transcriptText);
             entry.status = "done";
             entry.detail = result.text;
             setBookedAppointments(prev => [...prev, result.appointment]);
@@ -356,6 +441,8 @@ export default function Home() {
             break;
           case "transcript_lines":
             setTranscriptLines((prev) => [...prev, ...data.lines]);
+            // Accumulate full transcript text for date parsing
+            transcriptTextRef.current += " " + data.lines.map((l: TranscriptLine) => l.text).join(" ");
             if (data.lines.length > 0) {
               setCurrentTime(data.lines[data.lines.length - 1].timestamp);
             }
@@ -386,7 +473,8 @@ export default function Home() {
             triggerAgentAutonomousActions(
               data.actions,
               data.patient?.name || selectedPatient?.name || "Patient",
-              data.soap_note || { subjective: "", assessment: "" }
+              data.soap_note || { subjective: "", assessment: "" },
+              transcriptTextRef.current
             );
             break;
           case "error":
@@ -419,6 +507,7 @@ export default function Home() {
     setAgentLog([]);
     setAgentActive(false);
     setLiveRecordUpdates([]);
+    transcriptTextRef.current = "";
     setUploadStatus("Fetching audio sample...");
 
     try {
@@ -513,6 +602,7 @@ export default function Home() {
   // === LIVE MODE handlers ===
   const handleLiveTranscript = useCallback((line: TranscriptLine) => {
     setTranscriptLines((prev) => [...prev, line]);
+    transcriptTextRef.current += " " + line.text;
     setCurrentTime(line.timestamp);
   }, []);
 
@@ -532,6 +622,18 @@ export default function Home() {
     if (isLiveActive) {
       setIsLiveActive(false);
       setIsProcessing(false);
+      // Trigger agent autonomous actions with accumulated data from the live session
+      if (actions.length > 0) {
+        const patientName = selectedPatient?.name || "Patient";
+        // Build transcript text from accumulated lines
+        const fullTranscript = transcriptLines.map(l => l.text).join(" ");
+        triggerAgentAutonomousActions(
+          actions,
+          patientName,
+          { subjective: summary || "", assessment: "" },
+          fullTranscript
+        );
+      }
     } else {
       setIsLiveActive(true);
       setIsProcessing(true);
@@ -542,8 +644,9 @@ export default function Home() {
       setShowReport(false);
       setCurrentTime(0);
       setDuration(300);
+      transcriptTextRef.current = "";
     }
-  }, [isLiveActive]);
+  }, [isLiveActive, actions, transcriptLines, selectedPatient, summary, triggerAgentAutonomousActions]);
 
   const switchMode = (newMode: AppMode) => {
     clearAllTimers();
