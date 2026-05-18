@@ -68,7 +68,7 @@
 | Language | TypeScript | 5.5 | Type safety across the codebase |
 | Speech-to-Text | Speechmatics Real-Time Client | 8.3.2 | Transcription with speaker diarization |
 | Primary LLM | Featherless AI (google/gemma-4-31B-it) | — | Clinical reasoning, entity extraction, SOAP generation |
-| Fallback LLM | Google Gemini (gemini-2.0-flash) | — | Secondary reasoning engine |
+| Fallback LLM | Google Gemini (gemini-3.1-flash lite) | — | Secondary reasoning engine |
 | LLM SDK | OpenAI Node SDK | 4.50 | OpenAI-compatible client for Featherless |
 | AI SDK | @google/generative-ai | 0.21 | Gemini integration |
 | Styling | Tailwind CSS | 3.4 | Dark theme, responsive UI, animations |
