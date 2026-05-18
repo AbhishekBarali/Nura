@@ -8,8 +8,12 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        display: ["'Literata'", "Georgia", "serif"],
-        body: ["'Source Sans 3'", "system-ui", "sans-serif"],
+        display: ["var(--font-display)", "'Literata'", "Georgia", "serif"],
+        body: ["var(--font-body)", "'Source Sans 3'", "system-ui", "sans-serif"],
+      },
+      colors: {
+        primary: "var(--accent-primary)",
+        "primary-light": "var(--accent-light)",
       },
       animation: {
         "fade-in": "fade-in-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards",

@@ -50,7 +50,7 @@ export default function ActionCard({ action }: ActionCardProps) {
       {/* Header */}
       <div className="flex items-center justify-between mb-1.5">
         <div className="flex items-center gap-1.5">
-          <span className={`w-2 h-2 rounded-full ${config.dot}`} />
+          <span className={`w-2 h-2 rounded-full ${config.dot}`} aria-hidden="true" />
           <span className={`text-[10px] font-bold uppercase tracking-wide ${config.accent}`}>
             {config.label}
           </span>

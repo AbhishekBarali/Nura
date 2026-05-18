@@ -1,5 +1,20 @@
 import type { Metadata } from "next";
+import { Source_Sans_3, Literata } from "next/font/google";
 import "./globals.css";
+
+const sourceSans = Source_Sans_3({
+  subsets: ["latin"],
+  variable: "--font-body",
+  display: "swap",
+  weight: ["300", "400", "500", "600", "700", "800"],
+});
+
+const literata = Literata({
+  subsets: ["latin"],
+  variable: "--font-display",
+  display: "swap",
+  weight: ["400", "500", "600", "700"],
+});
 
 export const metadata: Metadata = {
   title: "Nura — Autonomous Clinical Voice Agent",
@@ -13,7 +28,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${sourceSans.variable} ${literata.variable}`}>
       <body className="min-h-screen antialiased">
         <div className="app-wrapper relative z-10">
           {children}

@@ -56,7 +56,7 @@ export default function AudioInput({
     <div className="elevated-card rounded-xl p-4">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <svg className="w-4 h-4 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg className="w-4 h-4 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5" />
           </svg>
           <label className="text-sm font-semibold text-[var(--text-primary)]">
@@ -98,7 +98,8 @@ export default function AudioInput({
               key={demo.id}
               onClick={() => onSelectDemo(demo.id)}
               disabled={isProcessing}
-              className={`relative p-3 rounded-lg border text-left transition-all duration-200 bg-white disabled:opacity-40 disabled:cursor-not-allowed ${accentMap[demo.accent]}`}
+              aria-pressed={isSelected}
+              className={`relative p-3 rounded-lg border text-left transition-all duration-200 bg-white disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:ring-offset-1 ${accentMap[demo.accent]}`}
             >
               <div className="flex items-center gap-2.5">
                 <span className="text-lg">{demo.icon}</span>

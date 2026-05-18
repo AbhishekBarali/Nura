@@ -32,7 +32,7 @@ export default function AgentLog({ entries, isActive }: AgentLogProps) {
     <div className="elevated-card rounded-xl overflow-hidden">
       <div className="px-4 py-2.5 border-b border-[var(--border-subtle)] flex items-center justify-between bg-slate-50">
         <div className="flex items-center gap-2">
-          <svg className="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg className="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
           </svg>
           <h3 className="text-sm font-semibold text-[var(--text-primary)]">Agent Decisions</h3>
@@ -45,7 +45,7 @@ export default function AgentLog({ entries, isActive }: AgentLogProps) {
         )}
       </div>
 
-      <div ref={scrollRef} className="max-h-[200px] overflow-y-auto px-4 py-2 space-y-1.5">
+      <div ref={scrollRef} className="max-h-[200px] overflow-y-auto px-4 py-2 space-y-1.5" role="log" aria-live="polite" aria-relevant="additions">
         {entries.map((entry) => (
           <div key={entry.id} className="flex items-start gap-3 py-2 animate-fade-in">
             {/* Status indicator */}

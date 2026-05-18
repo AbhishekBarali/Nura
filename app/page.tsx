@@ -2,16 +2,9 @@ import Link from "next/link";
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen flex flex-col bg-[#f8fafc] overflow-hidden">
-      {/* Subtle ambient gradients */}
-      <div className="fixed inset-0 pointer-events-none z-0">
-        <div className="absolute top-0 right-0 w-[800px] h-[800px] rounded-full bg-blue-100/40 blur-[120px] -translate-y-1/2 translate-x-1/3" />
-        <div className="absolute bottom-0 left-0 w-[600px] h-[600px] rounded-full bg-indigo-100/30 blur-[100px] translate-y-1/3 -translate-x-1/4" />
-        <div className="absolute top-1/2 left-1/2 w-[400px] h-[400px] rounded-full bg-emerald-50/40 blur-[80px] -translate-x-1/2 -translate-y-1/2" />
-      </div>
-
+    <div className="min-h-screen flex flex-col bg-[var(--bg-primary)] overflow-hidden">
       {/* Navigation */}
-      <nav className="relative z-10 w-full border-b border-slate-200/60 bg-white/70 backdrop-blur-md">
+      <nav className="relative z-10 w-full border-b border-slate-200/60 bg-white">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-blue-700 flex items-center justify-center">
@@ -33,12 +26,6 @@ export default function LandingPage() {
       {/* Hero Section */}
       <section className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 pt-20 pb-16">
         <div className="max-w-4xl mx-auto text-center">
-          {/* Badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-50 border border-blue-200 mb-8">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-xs font-semibold text-blue-800">AI Agent Olympics — Autonomous Clinical Intelligence</span>
-          </div>
-
           {/* Headline */}
           <h1 className="text-5xl sm:text-6xl lg:text-7xl font-display font-bold text-slate-900 leading-[1.08] tracking-tight mb-6">
             The Doctor Speaks.
@@ -73,31 +60,23 @@ export default function LandingPage() {
             </a>
           </div>
 
-          {/* Stats Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-2xl mx-auto">
-            <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm">
-              <p className="text-3xl font-display font-bold text-blue-700">49%</p>
-              <p className="text-sm text-slate-500 mt-1">of physician workday spent on documentation</p>
-            </div>
-            <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm">
-              <p className="text-3xl font-display font-bold text-red-600">62%</p>
-              <p className="text-sm text-slate-500 mt-1">of physicians report burnout from charting</p>
-            </div>
-            <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm">
-              <p className="text-3xl font-display font-bold text-emerald-600">$4.6B</p>
-              <p className="text-sm text-slate-500 mt-1">annual cost of physician turnover from burnout</p>
-            </div>
-          </div>
-
-          {/* Additional Impact Stats */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl mx-auto mt-6">
-            <div className="p-4 rounded-xl bg-red-50 border border-red-100">
-              <p className="text-2xl font-display font-bold text-red-700">250K</p>
-              <p className="text-xs text-red-600 mt-1">deaths/year linked to documentation fatigue errors (Johns Hopkins)</p>
-            </div>
-            <div className="p-4 rounded-xl bg-blue-50 border border-blue-100">
-              <p className="text-2xl font-display font-bold text-blue-700">$150K</p>
-              <p className="text-xs text-blue-600 mt-1">saved per physician per year in recovered clinical time</p>
+          {/* The Problem — asymmetric editorial layout */}
+          <div className="max-w-3xl mx-auto">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-5 text-left">The problem</p>
+            <div className="flex flex-col sm:flex-row gap-8 items-start text-left">
+              <div className="flex-1 border-l-2 border-red-300 pl-5">
+                <p className="text-4xl font-display font-bold text-slate-900">49%</p>
+                <p className="text-sm text-slate-600 mt-1 leading-relaxed">of a physician&apos;s workday is spent on documentation — not patients.</p>
+              </div>
+              <div className="flex-1 border-l-2 border-slate-300 pl-5">
+                <p className="text-4xl font-display font-bold text-slate-900">250K</p>
+                <p className="text-sm text-slate-600 mt-1 leading-relaxed">deaths/year linked to errors from documentation fatigue.</p>
+                <p className="text-xs text-slate-400 mt-1">Johns Hopkins, 2016</p>
+              </div>
+              <div className="flex-1 border-l-2 border-slate-300 pl-5">
+                <p className="text-4xl font-display font-bold text-slate-900">$4.6B</p>
+                <p className="text-sm text-slate-600 mt-1 leading-relaxed">annual cost of physician turnover driven by burnout.</p>
+              </div>
             </div>
           </div>
         </div>
@@ -309,18 +288,18 @@ export default function LandingPage() {
             <h2 className="text-3xl sm:text-4xl font-display font-bold text-slate-900 mb-3">Measurable Enterprise Value</h2>
             <p className="text-lg text-slate-500">For a 200-doctor hospital, Nura saves 400 hours of documentation time per day.</p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            <div className="text-center p-6 rounded-xl bg-blue-50 border border-blue-100">
-              <p className="text-4xl font-display font-bold text-blue-700">2h</p>
-              <p className="text-sm text-slate-600 mt-2">saved per physician per day</p>
+          <div className="flex flex-col md:flex-row items-stretch gap-0 rounded-2xl border border-slate-200 overflow-hidden">
+            <div className="flex-1 p-8 text-center border-b md:border-b-0 md:border-r border-slate-200">
+              <p className="text-5xl font-display font-bold text-blue-700">2h</p>
+              <p className="text-sm text-slate-600 mt-3">saved per physician per day</p>
             </div>
-            <div className="text-center p-6 rounded-xl bg-emerald-50 border border-emerald-100">
-              <p className="text-4xl font-display font-bold text-emerald-700">$150K</p>
-              <p className="text-sm text-slate-600 mt-2">recovered per doctor per year</p>
+            <div className="flex-1 p-8 text-center border-b md:border-b-0 md:border-r border-slate-200 bg-slate-50">
+              <p className="text-5xl font-display font-bold text-slate-900">$150K</p>
+              <p className="text-sm text-slate-600 mt-3">recovered per doctor per year</p>
             </div>
-            <div className="text-center p-6 rounded-xl bg-purple-50 border border-purple-100">
-              <p className="text-4xl font-display font-bold text-purple-700">0</p>
-              <p className="text-sm text-slate-600 mt-2">commands needed from the doctor</p>
+            <div className="flex-1 p-8 text-center">
+              <p className="text-5xl font-display font-bold text-emerald-700">0</p>
+              <p className="text-sm text-slate-600 mt-3">commands needed from the doctor</p>
             </div>
           </div>
         </div>

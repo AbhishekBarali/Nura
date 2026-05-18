@@ -53,7 +53,7 @@ export default function AppointmentCalendar({ appointments }: CalendarProps) {
 
   const days = [];
   for (let i = 0; i < startPad; i++) {
-    days.push(<div key={`pad-${i}`} className="h-9" />);
+    days.push(<div key={`pad-${i}`} className="h-11" />);
   }
   for (let day = 1; day <= totalDays; day++) {
     const dateObj = new Date(year, month, day);
@@ -66,7 +66,9 @@ export default function AppointmentCalendar({ appointments }: CalendarProps) {
       <button
         key={day}
         onClick={() => setSelectedDate(hasAppointment ? dateObj : null)}
-        className={`h-9 w-9 rounded-lg text-sm font-medium transition-all duration-150 relative flex items-center justify-center mx-auto ${
+        aria-label={`${dateObj.toLocaleDateString("en-US", { month: "long", day: "numeric" })}${hasAppointment ? `, ${dayAppointments.length} appointment${dayAppointments.length > 1 ? "s" : ""}` : ""}`}
+        aria-pressed={isSelected}
+        className={`h-11 w-11 rounded-lg text-sm font-medium transition-all duration-150 relative flex items-center justify-center mx-auto ${
           isSelected
             ? "bg-blue-700 text-white shadow-sm"
             : hasAppointment
@@ -89,7 +91,7 @@ export default function AppointmentCalendar({ appointments }: CalendarProps) {
       {/* Header */}
       <div className="px-4 py-3 border-b border-[var(--border-subtle)] bg-slate-50 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <svg className="w-4 h-4 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg className="w-4 h-4 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
           </svg>
           <h3 className="text-sm font-semibold text-[var(--text-primary)]">Clinic Schedule</h3>
@@ -103,14 +105,14 @@ export default function AppointmentCalendar({ appointments }: CalendarProps) {
 
       {/* Month Navigation */}
       <div className="px-4 pt-3 flex items-center justify-between">
-        <button onClick={prevMonth} className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <button onClick={prevMonth} aria-label="Previous month" className="p-2 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
           </svg>
         </button>
         <span className="text-sm font-semibold text-slate-700">{monthName}</span>
-        <button onClick={nextMonth} className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <button onClick={nextMonth} aria-label="Next month" className="p-2 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
           </svg>
         </button>
