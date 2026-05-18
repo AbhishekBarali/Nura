@@ -67,6 +67,28 @@ export default function Home() {
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   const { toasts, addToast, dismissToast } = useToast();
   const abortControllerRef = useRef<AbortController | null>(null);
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  // Clear all pending timers (prevents memory leaks on unmount/mode switch)
+  const clearAllTimers = useCallback(() => {
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+  }, []);
+
+  // Safe setTimeout that registers for cleanup
+  const safeTimeout = useCallback((fn: () => void, ms: number) => {
+    const id = setTimeout(fn, ms);
+    timersRef.current.push(id);
+    return id;
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      timersRef.current.forEach(clearTimeout);
+    };
+  }, []);
 
   // Fetch patients on mount
   useEffect(() => {
@@ -99,6 +121,7 @@ export default function Home() {
 
   // Trigger autonomous agent actions after analysis completes
   const triggerAgentAutonomousActions = useCallback((analysisActions: ActionCard[], patientName: string, soapNote: { subjective: string; assessment: string }) => {
+    clearAllTimers();
     setAgentActive(true);
     setAgentLog([]);
     setLiveRecordUpdates([]);
@@ -139,13 +162,13 @@ export default function Home() {
     t += 1400;
 
     if (symptoms.length > 0) {
-      setTimeout(() => {
+      safeTimeout(() => {
         const symNames = symptoms.slice(0, 3).map(s => (s.content as Record<string, string>).description).filter(Boolean);
         setLiveRecordUpdates(prev => [...prev, `+ Symptoms: ${symNames.join(", ") || "Reported"}`]);
       }, t - 600);
     }
     if (medications.length > 0) {
-      setTimeout(() => {
+      safeTimeout(() => {
         const medNames = medications.map(m => (m.content as Record<string, string>).name).filter(Boolean);
         setLiveRecordUpdates(prev => [...prev, `+ Medications: ${medNames.join(", ") || "Discussed"}`]);
       }, t - 200);
@@ -209,20 +232,20 @@ export default function Home() {
 
     steps.forEach((step, i) => {
       // Add entry (running state)
-      setTimeout(() => {
+      safeTimeout(() => {
         logEntries.push({ ...step.entry, id: `agent-${i}` });
         setAgentLog([...logEntries]);
 
         // Handle record update
         if (step.recordUpdate && step.recordUpdateDelay !== undefined) {
-          setTimeout(() => {
+          safeTimeout(() => {
             setLiveRecordUpdates(prev => [...prev, step.recordUpdate!]);
           }, step.recordUpdateDelay - step.startDelay);
         }
       }, step.startDelay);
 
       // Mark done
-      setTimeout(() => {
+      safeTimeout(() => {
         const entry = logEntries.find(e => e.id === `agent-${i}`);
         if (entry) {
           // Special handling for appointment booking — simulate schedule check
@@ -243,7 +266,7 @@ export default function Home() {
         }
       }, step.doneDelay);
     });
-  }, []);
+  }, [clearAllTimers, safeTimeout]);
 
   // === PRE-COMPUTED INSTANT DEMO — fast results for hackathon judges ===
   const runPrecomputedDemo = useCallback(async () => {
@@ -303,7 +326,7 @@ export default function Home() {
 
       // After all lines revealed, finalize
       const totalTime = lines.length * 60 + 800;
-      setTimeout(() => {
+      safeTimeout(() => {
         setTranscriptLines(lines);
         setActions(acts);
         setSummary(data.summary || "");
@@ -328,13 +351,13 @@ export default function Home() {
       setUploadStatus("Demo failed — try selecting a sample manually");
       setIsProcessing(false);
     }
-  }, [triggerAgentAutonomousActions]);
+  }, [triggerAgentAutonomousActions, safeTimeout]);
 
   // Auto-start pre-computed demo after onboarding — instant results for judges
   useEffect(() => {
     if (onboardingComplete && !autoPlayed) {
       setAutoPlayed(true);
-      setTimeout(() => {
+      safeTimeout(() => {
         runPrecomputedDemo();
       }, 600);
     }
@@ -347,11 +370,88 @@ export default function Home() {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
+    clearAllTimers();
     setIsProcessing(false);
     setIsLiveActive(false);
     setAgentActive(false);
     addToast({ type: "info", message: "Analysis stopped." });
-  }, [addToast]);
+  }, [addToast, clearAllTimers]);
+
+  // === SHARED SSE STREAM PARSER ===
+  const processSSEStream = useCallback(async (response: Response) => {
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("No response stream");
+
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const messages = buffer.split("\n\n");
+      buffer = messages.pop() || "";
+
+      for (const msg of messages) {
+        if (!msg.trim()) continue;
+        const eventMatch = msg.match(/^event: (.+)$/m);
+        const dataMatch = msg.match(/^data: (.+)$/m);
+        if (!eventMatch || !dataMatch) continue;
+
+        const event = eventMatch[1];
+        let data;
+        try { data = JSON.parse(dataMatch[1]); } catch { continue; }
+
+        switch (event) {
+          case "phase":
+            setUploadStatus(data.message);
+            if (data.duration) setDuration(data.duration);
+            break;
+          case "progress":
+            setUploadStatus(data.message);
+            break;
+          case "transcript_lines":
+            setTranscriptLines((prev) => [...prev, ...data.lines]);
+            if (data.lines.length > 0) {
+              setCurrentTime(data.lines[data.lines.length - 1].timestamp);
+            }
+            break;
+          case "actions_partial":
+            setActions(data.actions);
+            break;
+          case "actions":
+            setActions(data.actions);
+            break;
+          case "complete":
+            setUploadStatus("Analysis complete!");
+            if (data.patient && !selectedPatient) {
+              setSelectedPatient(data.patient);
+            }
+            setSummary(data.summary);
+            setDuration(data.duration || 60);
+            setActions(data.actions);
+            setReport({
+              soap_note: data.soap_note,
+              actions: data.actions,
+              record_changes: [],
+              time_saved: data.time_saved || "8 minutes",
+              total_actions: data.total_actions || data.actions.length,
+            });
+            setIsProcessing(false);
+            setInstantComplete(true);
+            triggerAgentAutonomousActions(
+              data.actions,
+              data.patient?.name || selectedPatient?.name || "Patient",
+              data.soap_note || { subjective: "", assessment: "" }
+            );
+            break;
+          case "error":
+            throw new Error(data.error);
+        }
+      }
+    }
+  }, [selectedPatient, triggerAgentAutonomousActions]);
 
   // === INSTANT MODE — now fetches the sample audio and transcribes it for real ===
   const SAMPLE_FILES: Record<number, string> = { 1: "/audio/sample-1.mp3", 2: "/audio/sample-2.mp3", 3: "/audio/sample-3.mp3" };
@@ -404,80 +504,7 @@ export default function Home() {
         throw new Error(err.error || "Audio processing failed");
       }
 
-      // Handle SSE stream (same logic as handleAudioUpload)
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("No response stream");
-
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const messages = buffer.split("\n\n");
-        buffer = messages.pop() || "";
-
-        for (const msg of messages) {
-          if (!msg.trim()) continue;
-          const eventMatch = msg.match(/^event: (.+)$/m);
-          const dataMatch = msg.match(/^data: (.+)$/m);
-          if (!eventMatch || !dataMatch) continue;
-
-          const event = eventMatch[1];
-          let data;
-          try { data = JSON.parse(dataMatch[1]); } catch { continue; }
-
-          switch (event) {
-            case "phase":
-              setUploadStatus(data.message);
-              if (data.duration) setDuration(data.duration);
-              break;
-            case "progress":
-              setUploadStatus(data.message);
-              break;
-            case "transcript_lines":
-              setTranscriptLines((prev) => [...prev, ...data.lines]);
-              if (data.lines.length > 0) {
-                setCurrentTime(data.lines[data.lines.length - 1].timestamp);
-              }
-              break;
-            case "actions_partial":
-              setActions(data.actions);
-              break;
-            case "actions":
-              setActions(data.actions);
-              break;
-            case "complete":
-              setUploadStatus("Analysis complete!");
-              if (data.patient && !selectedPatient) {
-                setSelectedPatient(data.patient);
-              }
-              setSummary(data.summary);
-              setDuration(data.duration || 60);
-              setActions(data.actions);
-              setReport({
-                soap_note: data.soap_note,
-                actions: data.actions,
-                record_changes: [],
-                time_saved: data.time_saved || "8 minutes",
-                total_actions: data.total_actions || data.actions.length,
-              });
-              setIsProcessing(false);
-              setInstantComplete(true);
-              // Trigger autonomous agent actions
-              triggerAgentAutonomousActions(
-                data.actions,
-                data.patient?.name || selectedPatient?.name || "Patient",
-                data.soap_note || { subjective: "", assessment: "" }
-              );
-              break;
-            case "error":
-              throw new Error(data.error);
-          }
-        }
-      }
+      await processSSEStream(response);
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") return;
       console.error("Processing error:", error);
@@ -489,7 +516,7 @@ export default function Home() {
         action: { label: "Retry", onClick: () => startInstantProcessing() },
       });
     }
-  }, [selectedPatient, selectedDemo, triggerAgentAutonomousActions, addToast]);
+  }, [selectedPatient, selectedDemo, triggerAgentAutonomousActions, addToast, processSSEStream]);
 
   // === UPLOAD MODE (via AudioInput upload button) ===
   const handleAudioUpload = useCallback(async (file: File) => {
@@ -526,80 +553,7 @@ export default function Home() {
         throw new Error(err.error || "Audio processing failed");
       }
 
-      // Handle SSE stream
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("No response stream");
-
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const messages = buffer.split("\n\n");
-        buffer = messages.pop() || "";
-
-        for (const msg of messages) {
-          if (!msg.trim()) continue;
-          const eventMatch = msg.match(/^event: (.+)$/m);
-          const dataMatch = msg.match(/^data: (.+)$/m);
-          if (!eventMatch || !dataMatch) continue;
-
-          const event = eventMatch[1];
-          let data;
-          try { data = JSON.parse(dataMatch[1]); } catch { continue; }
-
-          switch (event) {
-            case "phase":
-              setUploadStatus(data.message);
-              if (data.duration) setDuration(data.duration);
-              break;
-            case "progress":
-              setUploadStatus(data.message);
-              break;
-            case "transcript_lines":
-              setTranscriptLines((prev) => [...prev, ...data.lines]);
-              if (data.lines.length > 0) {
-                setCurrentTime(data.lines[data.lines.length - 1].timestamp);
-              }
-              break;
-            case "actions_partial":
-              setActions(data.actions);
-              break;
-            case "actions":
-              setActions(data.actions);
-              break;
-            case "complete":
-              setUploadStatus("Analysis complete!");
-              if (data.patient && !selectedPatient) {
-                setSelectedPatient(data.patient);
-              }
-              setSummary(data.summary);
-              setDuration(data.duration || 60);
-              setActions(data.actions);
-              setReport({
-                soap_note: data.soap_note,
-                actions: data.actions,
-                record_changes: [],
-                time_saved: data.time_saved || "8 minutes",
-                total_actions: data.total_actions || data.actions.length,
-              });
-              setIsProcessing(false);
-              setInstantComplete(true);
-              // Trigger autonomous agent actions
-              triggerAgentAutonomousActions(
-                data.actions,
-                data.patient?.name || selectedPatient?.name || "Patient",
-                data.soap_note || { subjective: "", assessment: "" }
-              );
-              break;
-            case "error":
-              throw new Error(data.error);
-          }
-        }
-      }
+      await processSSEStream(response);
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") return;
       console.error("Upload processing error:", error);
@@ -611,7 +565,7 @@ export default function Home() {
         action: { label: "Retry", onClick: () => { if (uploadedFile) handleAudioUpload(uploadedFile); } },
       });
     }
-  }, [selectedPatient, triggerAgentAutonomousActions, addToast]);
+  }, [selectedPatient, triggerAgentAutonomousActions, addToast, processSSEStream]);
 
   // === LIVE MODE handlers ===
   const handleLiveTranscript = useCallback((line: TranscriptLine) => {
@@ -649,6 +603,7 @@ export default function Home() {
   }, [isLiveActive]);
 
   const switchMode = (newMode: AppMode) => {
+    clearAllTimers();
     setMode(newMode);
     setIsProcessing(false);
     setIsLiveActive(false);
@@ -678,7 +633,7 @@ export default function Home() {
       <Onboarding onComplete={() => setOnboardingComplete(true)} />
       <Header />
 
-      <main className="flex-1 w-full">
+      <main id="main-content" className="flex-1 w-full">
         <h1 className="sr-only">Nura Clinical Demo</h1>
         <div className="max-w-[1600px] mx-auto px-3 sm:px-5 md:px-8 py-4 sm:py-6">
           {/* Breadcrumb */}
@@ -878,7 +833,7 @@ export default function Home() {
       {/* Footer */}
       <footer className="border-t border-[var(--border-subtle)] bg-white py-3 sm:py-4 px-4 sm:px-6">
         <div className="max-w-[1600px] mx-auto flex items-center justify-between">
-          <Link href="/" className="text-xs font-medium text-[var(--text-muted)] hover:text-blue-700 transition-colors flex items-center gap-1.5">
+          <Link href="/" aria-label="Navigate to Nura home page" className="text-xs font-medium text-[var(--text-muted)] hover:text-blue-700 transition-colors flex items-center gap-1.5">
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
             </svg>

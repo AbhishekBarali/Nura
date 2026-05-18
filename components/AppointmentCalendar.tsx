@@ -69,7 +69,7 @@ export default function AppointmentCalendar({ appointments, compact = false }: C
         onClick={() => setSelectedDate(hasAppointment ? dateObj : null)}
         aria-label={`${dateObj.toLocaleDateString("en-US", { month: "long", day: "numeric" })}${hasAppointment ? `, ${dayAppointments.length} appointment${dayAppointments.length > 1 ? "s" : ""}` : ""}`}
         aria-pressed={isSelected}
-        className={`${compact ? "h-8 w-8 text-xs" : "h-10 w-10 text-sm"} rounded-lg font-medium transition-all duration-150 relative flex items-center justify-center mx-auto ${
+        className={`${compact ? "h-9 w-9 text-xs" : "h-10 w-10 text-sm"} rounded-lg font-medium transition-all duration-150 relative flex items-center justify-center mx-auto ${
           isSelected
             ? "bg-blue-700 text-white shadow-sm"
             : hasAppointment

@@ -60,10 +60,18 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   const [isVisible, setIsVisible] = useState(true);
   const dialogRef = useRef<HTMLDivElement>(null);
 
-  // Always show onboarding for hackathon judges — no localStorage skip
+  // Force-show onboarding for demo/hackathon (controlled by env)
   useEffect(() => {
-    // Clear any previous session so guide always appears
-    localStorage.removeItem("nura-onboarding-completed");
+    if (process.env.NEXT_PUBLIC_FORCE_ONBOARDING !== "false") {
+      localStorage.removeItem("nura-onboarding-completed");
+    } else {
+      const completed = localStorage.getItem("nura-onboarding-completed");
+      if (completed) {
+        setIsVisible(false);
+        onComplete();
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

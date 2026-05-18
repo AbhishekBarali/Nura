@@ -30,8 +30,8 @@ const config: Config = {
           "100%": { opacity: "1", transform: "translateX(0)" },
         },
         breathe: {
-          "0%, 100%": { opacity: "0.5", transform: "scale(0.9)" },
-          "50%": { opacity: "1", transform: "scale(1.1)" },
+          "0%, 100%": { opacity: "0.4" },
+          "50%": { opacity: "1" },
         },
       },
     },

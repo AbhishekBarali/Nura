@@ -28,6 +28,8 @@ export default function LandingPage() {
         </div>
       </nav>
 
+      <main id="main-content">
+
       {/* Hero Section */}
       <section className="relative z-10 flex flex-col items-center justify-center px-6 pt-24 pb-20 bg-gradient-to-b from-[oklch(96%_0.03_260)] via-[oklch(97.8%_0.008_250)] to-[oklch(97.8%_0.008_250)]">
         {/* Subtle radial accent */}
@@ -560,6 +562,7 @@ export default function LandingPage() {
           <p className="text-xs text-slate-500 mt-4">No login. No setup. Three real scenarios included.</p>
         </div>
       </section>
+      </main>
 
       {/* Footer */}
       <footer className="relative z-10 border-t border-[oklch(25%_0.03_260)] bg-[oklch(18%_0.04_260)] py-6">
