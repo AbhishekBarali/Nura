@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
 import Header from "@/components/Header";
 import PatientSelector from "@/components/PatientSelector";
 import AudioSourcePicker from "@/components/AudioSourcePicker";
@@ -680,6 +681,17 @@ export default function Home() {
       <main className="flex-1 w-full">
         <h1 className="sr-only">Nura Clinical Demo</h1>
         <div className="max-w-[1600px] mx-auto px-5 sm:px-8 py-6">
+          {/* Breadcrumb */}
+          <div className="mb-4 flex items-center gap-2">
+            <Link href="/" className="group flex items-center gap-1.5 text-xs font-medium text-[var(--text-muted)] hover:text-blue-700 transition-colors">
+              <svg className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+              </svg>
+              Back to Home
+            </Link>
+            <span className="text-slate-300">/</span>
+            <span className="text-xs font-semibold text-[var(--text-primary)]">Live Demo</span>
+          </div>
           {/* Split Panel Layout */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[calc(100vh-140px)]">
             
@@ -864,14 +876,22 @@ export default function Home() {
       )}
 
       {/* Footer */}
-      <footer className="border-t border-[var(--border-subtle)] bg-white py-4 text-center">
-        <p className="text-xs text-[var(--text-muted)]">
-          <span className="font-display font-semibold text-sm text-[var(--text-secondary)]">Nura</span>
-          <span className="mx-2 text-slate-300">|</span>
-          Clinical Documentation Agent
-          <span className="mx-2 text-slate-300">|</span>
-          AI Agent Olympics
-        </p>
+      <footer className="border-t border-[var(--border-subtle)] bg-white py-4 px-6">
+        <div className="max-w-[1600px] mx-auto flex items-center justify-between">
+          <Link href="/" className="text-xs font-medium text-[var(--text-muted)] hover:text-blue-700 transition-colors flex items-center gap-1.5">
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+            </svg>
+            Back to Home
+          </Link>
+          <p className="text-xs text-[var(--text-muted)]">
+            <span className="font-display font-semibold text-sm text-[var(--text-secondary)]">Nura</span>
+            <span className="mx-2 text-slate-300">|</span>
+            Clinical Documentation Agent
+            <span className="mx-2 text-slate-300">|</span>
+            AI Agent Olympics
+          </p>
+        </div>
       </footer>
 
       <Toast toasts={toasts} onDismiss={dismissToast} />

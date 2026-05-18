@@ -122,7 +122,7 @@ export default function AppointmentCalendar({ appointments, compact = false }: C
       {/* Day Headers */}
       <div className={`${compact ? "px-3 pt-2" : "px-5 pt-3"} grid grid-cols-7 gap-1`}>
         {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => (
-          <div key={d} className={`text-center ${compact ? "text-[9px]" : "text-[10px]"} font-bold text-slate-400 uppercase tracking-wider pb-1.5`}>
+          <div key={d} className={`text-center ${compact ? "text-[9px]" : "text-[10px]"} font-bold text-slate-400 uppercase tracking-[0.08em] pb-1.5`}>
             {d}
           </div>
         ))}

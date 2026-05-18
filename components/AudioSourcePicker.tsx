@@ -376,7 +376,7 @@ export default function AudioSourcePicker({
                   <span className="w-[2px] h-2.5 bg-blue-400 rounded-full animate-pulse" style={{ animationDelay: "100ms" }} />
                 </span>
               )}
-              <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">
+              <span className="text-[10px] font-medium text-slate-400 uppercase tracking-[0.08em]">
                 {isPlaying ? "Now Playing" : "Ready"}
               </span>
             </div>

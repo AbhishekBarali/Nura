@@ -31,9 +31,9 @@ const STEPS = [
       </svg>
     ),
     features: [
-      { label: "① Auto-Demo", desc: "Click 'Start Demo' and we'll run a real consultation through the full pipeline automatically", icon: "⚡" },
-      { label: "② Pick a Recording", desc: "After the demo, choose from 3 clinical recordings or upload your own audio", icon: "🎧" },
-      { label: "③ Go Live", desc: "Switch to Live Mic mode and speak — Nura transcribes & analyzes in real-time", icon: "🎙️" },
+      { label: "Auto-Demo", desc: "Click 'Start Demo' and we'll run a real consultation through the full pipeline automatically", icon: "⚡", num: 1 },
+      { label: "Pick a Recording", desc: "After the demo, choose from 3 clinical recordings or upload your own audio", icon: "🎧", num: 2 },
+      { label: "Go Live", desc: "Switch to Live Mic mode and speak — Nura transcribes & analyzes in real-time", icon: "🎙️", num: 3 },
     ],
   },
   {
@@ -136,33 +136,35 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
         </button>
 
         {/* Content */}
-        <div className="px-8 pt-10 pb-8">
+        <div className="px-10 pt-12 pb-8">
           {/* Icon */}
-          <div className="flex justify-center mb-5">
+          <div className="flex justify-center mb-6">
             <div className="w-20 h-20 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center">
               {step.icon}
             </div>
           </div>
 
           {/* Text */}
-          <div className="text-center mb-6">
-            <h2 id="onboarding-title" className="text-2xl font-bold text-slate-900 mb-1">{step.title}</h2>
-            <p className="text-sm font-medium text-blue-600 mb-3">{step.subtitle}</p>
-            <p className="text-sm text-slate-600 leading-relaxed">{step.description}</p>
+          <div className="text-center mb-8">
+            <h2 id="onboarding-title" className="text-[1.75rem] font-display font-bold text-slate-900 mb-1.5 leading-tight">{step.title}</h2>
+            <p className="text-base font-medium text-blue-600 mb-4">{step.subtitle}</p>
+            <p className="text-[15px] text-slate-600 leading-relaxed max-w-sm mx-auto">{step.description}</p>
             {step.hint && (
-              <span className="inline-block mt-2 text-xs text-slate-400">{step.hint}</span>
+              <span className="inline-block mt-3 text-sm text-slate-400 italic">{step.hint}</span>
             )}
           </div>
 
           {/* Step-specific content */}
           {step.features && (
-            <div className="space-y-2.5 mb-6">
+            <div className="space-y-3 mb-8">
               {step.features.map((f) => (
-                <div key={f.label} className="flex items-center gap-3 px-4 py-3 rounded-lg bg-slate-50 border border-slate-200">
-                  <span className="text-xl">{f.icon}</span>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-800">{f.label}</p>
-                    <p className="text-xs text-slate-500">{f.desc}</p>
+                <div key={f.label} className="flex items-start gap-4 px-5 py-4 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 border border-blue-200 flex items-center justify-center">
+                    <span className="text-xs font-bold text-blue-700">{(f as { num?: number }).num}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[15px] font-bold text-slate-800">{f.label}</p>
+                    <p className="text-sm text-slate-500 leading-relaxed mt-0.5">{f.desc}</p>
                   </div>
                 </div>
               ))}
@@ -170,24 +172,24 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
           )}
 
           {step.actions && (
-            <div className="grid grid-cols-2 gap-2.5 mb-6">
+            <div className="grid grid-cols-2 gap-3 mb-8">
               {step.actions.map((a) => (
-                <div key={a.label} className={`px-3 py-2.5 rounded-lg border ${a.color}`}>
-                  <p className="text-xs font-bold">{a.label}</p>
-                  <p className="text-[10px] opacity-80 mt-0.5">{a.desc}</p>
+                <div key={a.label} className={`px-4 py-3.5 rounded-xl border ${a.color}`}>
+                  <p className="text-sm font-bold">{a.label}</p>
+                  <p className="text-xs opacity-75 mt-1 leading-relaxed">{a.desc}</p>
                 </div>
               ))}
             </div>
           )}
 
           {/* Navigation */}
-          <div className="flex items-center justify-between">
-            <div className="flex gap-1.5">
+          <div className="flex items-center justify-between pt-2">
+            <div className="flex gap-2">
               {STEPS.map((_, i) => (
                 <div
                   key={i}
-                  className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                    i === currentStep ? "bg-blue-600 w-6" : i < currentStep ? "bg-blue-300" : "bg-slate-200"
+                  className={`h-2.5 rounded-full transition-all duration-300 ${
+                    i === currentStep ? "bg-blue-600 w-7" : i < currentStep ? "bg-blue-300 w-2.5" : "bg-slate-200 w-2.5"
                   }`}
                 />
               ))}
@@ -195,7 +197,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
 
             <button
               onClick={handleNext}
-              className="px-6 py-2.5 bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm flex items-center gap-2"
+              className="px-7 py-3 bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm flex items-center gap-2"
             >
               {currentStep === STEPS.length - 1 ? "Start Demo" : "Next"}
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>

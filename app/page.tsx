@@ -2,9 +2,9 @@ import Link from "next/link";
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen flex flex-col bg-[#f8fafc] overflow-hidden">
+    <div className="min-h-screen flex flex-col bg-[oklch(97.8%_0.008_250)] overflow-hidden">
       {/* Navigation */}
-      <nav className="sticky top-0 z-50 w-full border-b border-slate-200/60 bg-white/95 backdrop-blur-sm">
+      <nav className="sticky top-0 z-50 w-full border-b border-[oklch(90%_0.015_260_/_0.5)] bg-[oklch(99%_0.005_250_/_0.92)] backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-blue-700 flex items-center justify-center">
@@ -29,23 +29,27 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero Section */}
-      <section className="relative z-10 flex flex-col items-center justify-center px-6 pt-24 pb-20">
+      <section className="relative z-10 flex flex-col items-center justify-center px-6 pt-24 pb-20 bg-gradient-to-b from-[oklch(96%_0.03_260)] via-[oklch(97.8%_0.008_250)] to-[oklch(97.8%_0.008_250)]">
+        {/* Subtle radial accent */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[500px] bg-[radial-gradient(ellipse_at_center,_oklch(92%_0.06_260_/_0.3),_transparent_70%)]" />
+        </div>
         <div className="max-w-4xl mx-auto text-center">
           {/* Speechmatics Badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 border border-blue-200 mb-8">
-            <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
-            <span className="text-xs font-semibold text-blue-800">Built on Speechmatics Medical Model — 98% accuracy</span>
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[oklch(95%_0.04_260)] border border-[oklch(86%_0.06_260)] mb-8">
+            <span className="w-2 h-2 rounded-full bg-[oklch(50%_0.2_260)] animate-pulse" />
+            <span className="text-xs font-semibold text-[oklch(35%_0.1_260)]">Built on Speechmatics Medical Model — 98% accuracy</span>
           </div>
 
           {/* Headline */}
-          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-display font-bold text-slate-900 leading-[1.08] tracking-tight mb-6">
+          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-display font-bold text-slate-900 leading-[1.08] tracking-tight mb-6 [text-wrap:balance]">
             The Doctor Speaks.
             <br />
             <span className="text-blue-700">Nura Does Everything Else.</span>
           </h1>
 
           {/* Market positioning stat */}
-          <p className="text-base sm:text-lg text-slate-500 max-w-2xl mx-auto leading-relaxed mb-10">
+          <p className="text-base sm:text-lg text-slate-500 max-w-2xl mx-auto leading-relaxed mb-10 [text-wrap:pretty]">
             Ambient AI scribes generated $600M in revenue in 2025. They only transcribe.
             <br className="hidden sm:block" />
             <span className="text-slate-800 font-semibold">Nura transcribes, reasons, and acts.</span>
@@ -55,7 +59,7 @@ export default function LandingPage() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-20">
             <Link
               href="/demo"
-              className="group px-8 py-4 bg-blue-700 hover:bg-blue-800 text-white text-base font-semibold rounded-xl transition-all duration-200 shadow-lg shadow-blue-700/20 hover:shadow-xl hover:shadow-blue-700/30 flex items-center gap-3"
+              className="group px-8 py-4 bg-[oklch(44%_0.19_260)] hover:bg-[oklch(40%_0.2_260)] text-white text-base font-semibold rounded-xl transition-all duration-200 shadow-lg shadow-[oklch(44%_0.19_260_/_0.25)] hover:shadow-xl hover:shadow-[oklch(44%_0.19_260_/_0.35)] flex items-center gap-3"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
@@ -75,26 +79,26 @@ export default function LandingPage() {
 
           {/* The Problem — verified stats, no banned side-stripe borders */}
           <div className="max-w-4xl mx-auto">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-6 text-left">The crisis</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.08em] mb-6 text-left">The crisis</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
               <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm">
-                <p className="text-3xl font-display font-bold text-slate-900">3+ hrs</p>
-                <p className="text-sm text-slate-600 mt-2 leading-relaxed">per day spent on documentation alone</p>
+                <p className="text-3xl font-display font-bold text-slate-900 tabular-nums">3+ hrs</p>
+                <p className="text-sm text-slate-600 mt-2 leading-relaxed [text-wrap:pretty]">per day spent on documentation alone</p>
                 <p className="text-[10px] text-slate-400 mt-2 font-medium">J Gen Intern Med, 2023</p>
               </div>
               <div className="p-5 rounded-xl bg-white border border-red-200 shadow-sm">
-                <p className="text-3xl font-display font-bold text-slate-900">251,454</p>
-                <p className="text-sm text-slate-600 mt-2 leading-relaxed">deaths/year from medical errors (3rd leading cause, US)</p>
+                <p className="text-3xl font-display font-bold text-slate-900 tabular-nums">251,454</p>
+                <p className="text-sm text-slate-600 mt-2 leading-relaxed [text-wrap:pretty]">deaths/year from medical errors (3rd leading cause, US)</p>
                 <p className="text-[10px] text-slate-400 mt-2 font-medium">Makary &amp; Daniel, BMJ/Johns Hopkins, 2016</p>
               </div>
               <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm">
-                <p className="text-3xl font-display font-bold text-slate-900">43%</p>
-                <p className="text-sm text-slate-600 mt-2 leading-relaxed">of physicians experience burnout across 10 high-income countries</p>
+                <p className="text-3xl font-display font-bold text-slate-900 tabular-nums">43%</p>
+                <p className="text-sm text-slate-600 mt-2 leading-relaxed [text-wrap:pretty]">of physicians experience burnout across 10 high-income countries</p>
                 <p className="text-[10px] text-slate-400 mt-2 font-medium">Commonwealth Fund, 2025</p>
               </div>
               <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm">
-                <p className="text-3xl font-display font-bold text-slate-900">1M</p>
-                <p className="text-sm text-slate-600 mt-2 leading-relaxed">health workers short by 2030 in WHO European Region</p>
+                <p className="text-3xl font-display font-bold text-slate-900 tabular-nums">1M</p>
+                <p className="text-sm text-slate-600 mt-2 leading-relaxed [text-wrap:pretty]">health workers short by 2030 in WHO European Region</p>
                 <p className="text-[10px] text-slate-400 mt-2 font-medium">WHO Europe, 2026</p>
               </div>
             </div>
@@ -103,11 +107,11 @@ export default function LandingPage() {
       </section>
 
       {/* Beyond AI Scribes — with market context */}
-      <section id="how-it-works" className="relative z-10 py-20 bg-white border-t border-slate-200">
+      <section id="how-it-works" className="relative z-10 py-20 bg-white border-t border-[oklch(90%_0.012_250)]">
         <div className="max-w-5xl mx-auto px-6">
           <div className="text-center mb-14">
             <h2 className="text-3xl sm:text-4xl font-display font-bold text-slate-900 mb-4">Beyond AI Scribes</h2>
-            <p className="text-base text-slate-500 max-w-2xl mx-auto leading-relaxed">
+            <p className="text-base text-slate-500 max-w-2xl mx-auto leading-relaxed [text-wrap:pretty]">
               The $600M ambient scribe market is already commoditizing; 67% of providers plan to switch vendors.
               The next opportunity isn&apos;t better transcription. It&apos;s autonomous clinical intelligence.
             </p>
@@ -142,8 +146,8 @@ export default function LandingPage() {
               </div>
             </div>
 
-            <div className="p-6 rounded-2xl bg-blue-50 border-2 border-blue-200 relative">
-              <div className="absolute -top-3 right-4 px-2.5 py-0.5 bg-blue-700 text-white text-[10px] font-bold uppercase tracking-wider rounded-full">Nura</div>
+            <div className="p-6 rounded-2xl bg-[oklch(94%_0.04_260)] border-2 border-[oklch(78%_0.1_260)] relative shadow-md shadow-blue-100">
+              <div className="absolute -top-3 right-4 px-2.5 py-0.5 bg-blue-700 text-white text-[10px] font-bold uppercase tracking-[0.08em] rounded-full">Nura</div>
               <div className="w-10 h-10 rounded-xl bg-blue-700 flex items-center justify-center mb-4">
                 <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
@@ -160,14 +164,14 @@ export default function LandingPage() {
           {/* Pipeline Steps */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             {[
-              { num: "01", title: "Listen", desc: "Real-time streaming transcription with speaker diarization" },
-              { num: "02", title: "Extract", desc: "Medications, symptoms, allergies, conditions" },
-              { num: "03", title: "Cross-Reference", desc: "Drug interactions & allergy conflicts checked instantly" },
-              { num: "04", title: "Decide", desc: "Urgency classification, referral routing, gap analysis" },
-              { num: "05", title: "Act", desc: "SOAP notes, record updates, referrals, appointments" },
+              { num: "01", title: "Listen", desc: "Real-time streaming transcription with speaker diarization", color: "bg-blue-50 border-blue-200 hover:bg-blue-100" },
+              { num: "02", title: "Extract", desc: "Medications, symptoms, allergies, conditions", color: "bg-indigo-50 border-indigo-200 hover:bg-indigo-100" },
+              { num: "03", title: "Cross-Reference", desc: "Drug interactions & allergy conflicts checked instantly", color: "bg-violet-50 border-violet-200 hover:bg-violet-100" },
+              { num: "04", title: "Decide", desc: "Urgency classification, referral routing, gap analysis", color: "bg-purple-50 border-purple-200 hover:bg-purple-100" },
+              { num: "05", title: "Act", desc: "SOAP notes, record updates, referrals, appointments", color: "bg-emerald-50 border-emerald-200 hover:bg-emerald-100" },
             ].map((step, i) => (
-              <div key={i} className="relative p-4 rounded-xl bg-slate-50 border border-slate-200 group hover:bg-blue-50 hover:border-blue-200 transition-colors duration-200">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">{step.num}</p>
+              <div key={i} className={`relative p-4 rounded-xl border ${step.color} transition-colors duration-200`}>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.08em] mb-2">{step.num}</p>
                 <h4 className="text-sm font-bold text-slate-800 mb-1">{step.title}</h4>
                 <p className="text-xs text-slate-500 leading-relaxed">{step.desc}</p>
                 {i < 4 && (
@@ -184,7 +188,7 @@ export default function LandingPage() {
       </section>
 
       {/* Competitive Matrix */}
-      <section className="relative z-10 py-20 border-t border-slate-200 bg-[#f8fafc]">
+      <section className="relative z-10 py-20 border-t border-[oklch(90%_0.012_250)] bg-[oklch(97.8%_0.008_250)]">
         <div className="max-w-5xl mx-auto px-6">
           <div className="text-center mb-12">
             <h2 className="text-3xl sm:text-4xl font-display font-bold text-slate-900 mb-4">Why This Isn&apos;t Just Another Scribe</h2>
@@ -229,7 +233,7 @@ export default function LandingPage() {
       </section>
 
       {/* Market Opportunity */}
-      <section id="market" className="relative z-10 py-20 bg-white border-t border-slate-200">
+      <section id="market" className="relative z-10 py-20 bg-white border-t border-[oklch(90%_0.012_250)]">
         <div className="max-w-5xl mx-auto px-6">
           <div className="text-center mb-12">
             <h2 className="text-3xl sm:text-4xl font-display font-bold text-slate-900 mb-4">Market Opportunity</h2>
@@ -238,18 +242,18 @@ export default function LandingPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
             <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 text-center">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Total Addressable Market</p>
-              <p className="text-4xl font-display font-bold text-slate-900">$16.25B</p>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-[0.08em] mb-2">Total Addressable Market</p>
+              <p className="text-4xl font-display font-bold text-slate-900 tabular-nums">$16.25B</p>
               <p className="text-sm text-slate-500 mt-2">Ambient Clinical Intelligence by 2035</p>
             </div>
-            <div className="p-6 rounded-2xl bg-blue-50 border border-blue-200 text-center">
-              <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-2">Serviceable Market (US)</p>
-              <p className="text-4xl font-display font-bold text-blue-800">$2.87B</p>
+            <div className="p-6 rounded-2xl bg-[oklch(94%_0.04_260)] border border-[oklch(86%_0.06_260)] text-center">
+              <p className="text-xs font-semibold text-blue-600 uppercase tracking-[0.08em] mb-2">Serviceable Market (US)</p>
+              <p className="text-4xl font-display font-bold text-blue-800 tabular-nums">$2.87B</p>
               <p className="text-sm text-blue-600 mt-2">ACI market in 2025, growing 2.4x YoY</p>
             </div>
             <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 text-center">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Healthcare AI Spend</p>
-              <p className="text-4xl font-display font-bold text-slate-900">$1.4B</p>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-[0.08em] mb-2">Healthcare AI Spend</p>
+              <p className="text-4xl font-display font-bold text-slate-900 tabular-nums">$1.4B</p>
               <p className="text-sm text-slate-500 mt-2">Tripled from 2024; 85% goes to startups</p>
               <p className="text-[10px] text-slate-400 mt-1">Menlo Ventures, 2025</p>
             </div>
@@ -265,10 +269,10 @@ export default function LandingPage() {
       </section>
 
       {/* Speechmatics Technology Section */}
-      <section id="technology" className="relative z-10 py-20 border-t border-slate-200 bg-[#f8fafc]">
+      <section id="technology" className="relative z-10 py-20 border-t border-[oklch(90%_0.012_250)] bg-gradient-to-b from-[oklch(97%_0.015_250)] to-[oklch(96%_0.025_260)]">
         <div className="max-w-5xl mx-auto px-6">
           <div className="text-center mb-12">
-            <p className="text-xs font-semibold text-blue-600 uppercase tracking-widest mb-3">Foundation Technology</p>
+            <p className="text-xs font-semibold text-blue-600 uppercase tracking-[0.08em] mb-3">Foundation Technology</p>
             <h2 className="text-3xl sm:text-4xl font-display font-bold text-slate-900 mb-4">Powered by Speechmatics Medical Model</h2>
             <p className="text-base text-slate-500 max-w-2xl mx-auto">
               Without Speechmatics, the entire pipeline breaks. It&apos;s not a component; it&apos;s the foundation
@@ -294,7 +298,7 @@ export default function LandingPage() {
 
           {/* Architecture Diagram — visual flow */}
           <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-6">Processing Pipeline — 2-5 second end-to-end latency</p>
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-[0.08em] mb-6">Processing Pipeline — 2-5 second end-to-end latency</p>
             <div className="flex flex-col gap-3">
               {/* Step 1 */}
               <div className="flex items-center gap-3">
@@ -372,7 +376,7 @@ export default function LandingPage() {
       </section>
 
       {/* Evidence-Based Impact */}
-      <section className="relative z-10 py-20 bg-white border-t border-slate-200">
+      <section className="relative z-10 py-20 bg-white border-t border-[oklch(90%_0.012_250)]">
         <div className="max-w-5xl mx-auto px-6">
           <div className="text-center mb-12">
             <h2 className="text-3xl sm:text-4xl font-display font-bold text-slate-900 mb-4">Evidence-Based Impact</h2>
@@ -382,7 +386,7 @@ export default function LandingPage() {
           {/* Research stats as clean rows */}
           <div className="mb-8 rounded-2xl border border-slate-200 bg-white overflow-hidden">
             <div className="px-6 py-4 bg-slate-50 border-b border-slate-200">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">What peer-reviewed research shows</p>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-[0.08em]">What peer-reviewed research shows</p>
             </div>
             <div className="divide-y divide-slate-100">
               {[
@@ -392,7 +396,7 @@ export default function LandingPage() {
                 { stat: "600+", desc: "offices using AI scribes at Kaiser Permanente (40 hospitals)", source: "AHA, 2024" },
               ].map((row, i) => (
                 <div key={i} className="flex items-center gap-4 px-6 py-4">
-                  <p className="text-2xl font-display font-bold text-blue-700 w-24 flex-shrink-0">{row.stat}</p>
+                  <p className="text-2xl font-display font-bold text-blue-700 w-24 flex-shrink-0 tabular-nums">{row.stat}</p>
                   <p className="text-sm text-slate-700 flex-1">{row.desc}</p>
                   <p className="text-[10px] text-slate-400 font-medium flex-shrink-0">{row.source}</p>
                 </div>
@@ -403,15 +407,15 @@ export default function LandingPage() {
           {/* Nura's differentiator */}
           <div className="grid grid-cols-1 md:grid-cols-[1fr,auto] gap-6 items-start">
             <div className="p-6 rounded-2xl bg-blue-50 border border-blue-200">
-              <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-3">Nura goes beyond</p>
+              <p className="text-xs font-semibold text-blue-600 uppercase tracking-[0.08em] mb-3">Nura goes beyond</p>
               <p className="text-sm text-slate-700 leading-relaxed">
                 Those systems only generate notes. Nura does everything they do <span className="font-semibold">plus</span> detects drug interactions,
                 flags allergies, routes referrals, and books follow-ups — autonomously.
               </p>
             </div>
             <div className="p-5 rounded-2xl bg-red-50 border border-red-200 text-center min-w-[200px]">
-              <p className="text-xs text-red-600 font-semibold uppercase tracking-wider mb-2">Preventable errors</p>
-              <p className="text-3xl font-display font-bold text-slate-900">44K–98K</p>
+              <p className="text-xs text-red-600 font-semibold uppercase tracking-[0.08em] mb-2">Preventable errors</p>
+              <p className="text-3xl font-display font-bold text-slate-900 tabular-nums">44K–98K</p>
               <p className="text-xs text-slate-600 mt-1">hospital deaths/year (US)</p>
               <p className="text-[10px] text-slate-400 mt-1">StatPearls, 2024</p>
             </div>
@@ -420,7 +424,7 @@ export default function LandingPage() {
       </section>
 
       {/* Enterprise ROI */}
-      <section className="relative z-10 py-20 border-t border-slate-200 bg-[#f8fafc]">
+      <section className="relative z-10 py-20 border-t border-[oklch(90%_0.012_250)] bg-[oklch(97.8%_0.008_250)]">
         <div className="max-w-5xl mx-auto px-6">
           <div className="text-center mb-12">
             <h2 className="text-3xl sm:text-4xl font-display font-bold text-slate-900 mb-3">Enterprise ROI</h2>
@@ -429,19 +433,19 @@ export default function LandingPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
             <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm text-center">
-              <p className="text-4xl font-display font-bold text-blue-700">400h</p>
+              <p className="text-4xl font-display font-bold text-blue-700 tabular-nums">400h</p>
               <p className="text-sm text-slate-600 mt-2">documentation hours saved per day</p>
             </div>
             <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm text-center">
-              <p className="text-4xl font-display font-bold text-slate-900">$60K</p>
+              <p className="text-4xl font-display font-bold text-slate-900 tabular-nums">$60K</p>
               <p className="text-sm text-slate-600 mt-2">saved per day at $150/hr physician cost</p>
             </div>
-            <div className="p-6 rounded-2xl bg-white border border-emerald-200 shadow-sm text-center">
-              <p className="text-4xl font-display font-bold text-emerald-700">$15.6M</p>
+            <div className="p-6 rounded-2xl bg-[oklch(96%_0.03_160)] border border-emerald-200 shadow-sm shadow-emerald-50 text-center">
+              <p className="text-4xl font-display font-bold text-emerald-700 tabular-nums">$15.6M</p>
               <p className="text-sm text-slate-600 mt-2">annual savings per hospital</p>
             </div>
             <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm text-center">
-              <p className="text-4xl font-display font-bold text-slate-900">$500K+</p>
+              <p className="text-4xl font-display font-bold text-slate-900 tabular-nums">$500K+</p>
               <p className="text-sm text-slate-600 mt-2">cost to replace one physician</p>
               <p className="text-[10px] text-slate-400 mt-1">Mayo Clinic Proceedings, 2022</p>
             </div>
@@ -457,7 +461,7 @@ export default function LandingPage() {
       </section>
 
       {/* Demo Scenarios */}
-      <section className="relative z-10 py-20 bg-white border-t border-slate-200">
+      <section className="relative z-10 py-20 bg-white border-t border-[oklch(90%_0.012_250)]">
         <div className="max-w-5xl mx-auto px-6">
           <div className="text-center mb-12">
             <h2 className="text-3xl sm:text-4xl font-display font-bold text-slate-900 mb-4">60 Seconds to Clinical Intelligence</h2>
@@ -466,21 +470,21 @@ export default function LandingPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
             <div className="p-6 rounded-2xl bg-red-50 border border-red-200">
-              <p className="text-[10px] font-bold text-red-600 uppercase tracking-wider mb-3">Demo 1</p>
+              <p className="text-[10px] font-bold text-red-600 uppercase tracking-[0.08em] mb-3">Demo 1</p>
               <h4 className="text-base font-bold text-slate-800 mb-2">Drug Interaction Detection</h4>
               <p className="text-sm text-slate-600 leading-relaxed">
                 Lisinopril + Ibuprofen prescribed in conversation. Nura catches the interaction and alerts in real-time.
               </p>
             </div>
             <div className="p-6 rounded-2xl bg-amber-50 border border-amber-200">
-              <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider mb-3">Demo 2</p>
+              <p className="text-[10px] font-bold text-amber-600 uppercase tracking-[0.08em] mb-3">Demo 2</p>
               <h4 className="text-base font-bold text-slate-800 mb-2">Allergy Conflict Alert</h4>
               <p className="text-sm text-slate-600 leading-relaxed">
                 Sulfa drug prescribed to patient with documented sulfa allergy. Nura flags it before the prescription leaves the room.
               </p>
             </div>
             <div className="p-6 rounded-2xl bg-purple-50 border border-purple-200">
-              <p className="text-[10px] font-bold text-purple-600 uppercase tracking-wider mb-3">Demo 3</p>
+              <p className="text-[10px] font-bold text-purple-600 uppercase tracking-[0.08em] mb-3">Demo 3</p>
               <h4 className="text-base font-bold text-slate-800 mb-2">Urgent Cardiac Referral</h4>
               <p className="text-sm text-slate-600 leading-relaxed">
                 Patient describes chest pain on exertion. Nura classifies urgency and routes a cardiology referral autonomously.
@@ -503,7 +507,7 @@ export default function LandingPage() {
       </section>
 
       {/* Future Roadmap */}
-      <section id="roadmap" className="relative z-10 py-20 border-t border-slate-200 bg-[#f8fafc]">
+      <section id="roadmap" className="relative z-10 py-20 border-t border-[oklch(90%_0.012_250)] bg-[oklch(97.8%_0.008_250)]">
         <div className="max-w-4xl mx-auto px-6">
           <div className="text-center mb-12">
             <h2 className="text-3xl sm:text-4xl font-display font-bold text-slate-900 mb-4">Roadmap</h2>
@@ -520,7 +524,7 @@ export default function LandingPage() {
             ].map((item, i) => (
               <div key={i} className={`flex gap-5 p-5 rounded-xl border ${item.active ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200'}`}>
                 <div className="flex-shrink-0 w-20 text-right">
-                  <p className={`text-xs font-bold uppercase tracking-wider ${item.active ? 'text-blue-700' : 'text-slate-400'}`}>{item.phase}</p>
+                  <p className={`text-xs font-bold uppercase tracking-[0.08em] ${item.active ? 'text-blue-700' : 'text-slate-400'}`}>{item.phase}</p>
                 </div>
                 <div className="flex-1 min-w-0">
                   <h4 className="text-sm font-bold text-slate-800 mb-1">{item.title}</h4>
@@ -533,10 +537,14 @@ export default function LandingPage() {
       </section>
 
       {/* Final CTA */}
-      <section className="relative z-10 py-24 bg-slate-900 text-white">
+      <section className="relative z-10 py-24 bg-[oklch(18%_0.04_260)] text-white overflow-hidden">
+        {/* Subtle gradient orb */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[radial-gradient(ellipse_at_center,_oklch(30%_0.1_260_/_0.3),_transparent_70%)]" />
+        </div>
         <div className="max-w-3xl mx-auto px-6 text-center">
           <h2 className="text-3xl sm:text-4xl font-display font-bold mb-5">Doctors Are Burning Out.<br/>Patients Are Paying The Price.</h2>
-          <p className="text-base text-slate-400 mb-8 max-w-xl mx-auto leading-relaxed">
+          <p className="text-base text-slate-400 mb-8 max-w-xl mx-auto leading-relaxed [text-wrap:pretty]">
             251,454 deaths per year from medical errors. 1 million health workers short in Europe by 2030.
             The $600M scribe market only transcribes. Nura transcribes, reasons, and acts.
           </p>
@@ -554,7 +562,7 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="relative z-10 border-t border-slate-800 bg-slate-900 py-6">
+      <footer className="relative z-10 border-t border-[oklch(25%_0.03_260)] bg-[oklch(18%_0.04_260)] py-6">
         <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded bg-blue-700 flex items-center justify-center">

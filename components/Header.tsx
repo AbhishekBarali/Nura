@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
+
 export default function Header() {
   return (
     <header className="border-b border-[var(--border-subtle)] bg-white sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+        <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
           {/* Medical cross logo */}
           <div className="w-10 h-10 rounded-lg bg-blue-700 flex items-center justify-center">
             <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -18,7 +20,7 @@ export default function Header() {
               Clinical Documentation Agent
             </p>
           </div>
-        </div>
+        </Link>
 
         <div className="flex items-center gap-4">
           <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200">
