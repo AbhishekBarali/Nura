@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Header from "@/components/Header";
 import PatientSelector from "@/components/PatientSelector";
-import AudioInput from "@/components/AudioInput";
+import AudioSourcePicker from "@/components/AudioSourcePicker";
 import LiveTranscript from "@/components/LiveTranscript";
 import AgentActions from "@/components/AgentActions";
 import CompleteReport from "@/components/CompleteReport";
@@ -75,57 +75,14 @@ export default function Home() {
       .catch(console.error);
   }, []);
 
-  // Auto-play demo after onboarding
+  // Auto-play removed — real transcription requires explicit user action
   useEffect(() => {
-    if (onboardingComplete && !autoPlayed && !isProcessing && mode === "instant" && selectedDemo) {
+    if (onboardingComplete && !autoPlayed) {
       setAutoPlayed(true);
-      // Short delay so user sees the UI before auto-play kicks in
-      const timer = setTimeout(() => {
-        startInstantProcessing();
-      }, 800);
-      return () => clearTimeout(timer);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onboardingComplete]);
+  }, [onboardingComplete, autoPlayed]);
 
-  // Staggered animation for instant mode
-  useEffect(() => {
-    if (!isProcessing || mode !== "instant") return;
-    if (allTranscriptLines.length === 0 && allActions.length === 0) return;
-
-    let transcriptIdx = 0;
-    const transcriptInterval = setInterval(() => {
-      if (transcriptIdx >= allTranscriptLines.length) {
-        clearInterval(transcriptInterval);
-        return;
-      }
-      const line = allTranscriptLines[transcriptIdx];
-      setTranscriptLines((tl) => [...tl, line]);
-      setCurrentTime(line.timestamp);
-      transcriptIdx++;
-    }, 120);
-
-    const actionTimeout = setTimeout(() => {
-      let actionIdx = 0;
-      const actionInterval = setInterval(() => {
-        if (actionIdx >= allActions.length) {
-          clearInterval(actionInterval);
-          setTimeout(() => {
-            setIsProcessing(false);
-            setInstantComplete(true);
-          }, 400);
-          return;
-        }
-        setActions((prev) => [...prev, allActions[actionIdx]]);
-        actionIdx++;
-      }, 200);
-    }, 600);
-
-    return () => {
-      clearInterval(transcriptInterval);
-      clearTimeout(actionTimeout);
-    };
-  }, [isProcessing, mode, allTranscriptLines, allActions]);
+  // Staggered animation no longer needed — real-time SSE streaming handles display
 
   // Mock clinic schedule for appointment booking simulation
   const getAppointmentResult = (department: string, patientName: string): { text: string; appointment: BookedAppointment } => {
@@ -306,16 +263,15 @@ export default function Home() {
     addToast({ type: "info", message: "Analysis stopped." });
   }, [addToast]);
 
-  // === INSTANT MODE ===
+  // === INSTANT MODE — now fetches the sample audio and transcribes it for real ===
+  const SAMPLE_FILES: Record<number, string> = { 1: "/audio/sample-1.mp3", 2: "/audio/sample-2.mp3", 3: "/audio/sample-3.mp3" };
+  const SAMPLE_NAMES: Record<number, string> = { 1: "Acute Headache & Advance Care Planning", 2: "Chronic Back Pain — Treatment Planning", 3: "Clinical Consultation Recording" };
+
   const startInstantProcessing = useCallback(async () => {
     if (!selectedDemo) return;
 
-    // Auto-select matching patient if not selected
-    // selectedPatient.id of 0 means "new patient" — use demoId to match
-    const patientId = (selectedPatient && selectedPatient.id > 0) ? selectedPatient.id : selectedDemo;
-
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
+    const audioUrl = SAMPLE_FILES[selectedDemo];
+    if (!audioUrl) return;
 
     setIsProcessing(true);
     setTranscriptLines([]);
@@ -330,47 +286,116 @@ export default function Home() {
     setAgentLog([]);
     setAgentActive(false);
     setLiveRecordUpdates([]);
+    setUploadStatus("Fetching audio sample...");
 
     try {
-      const response = await fetch("/api/instant-analysis", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ patientId, demoId: selectedDemo }),
-        signal: controller.signal,
-      });
+      // Fetch the audio file from public folder and send to transcription
+      const audioResponse = await fetch(audioUrl);
+      if (!audioResponse.ok) throw new Error("Failed to fetch audio sample");
+      const blob = await audioResponse.blob();
+      const file = new File([blob], `${SAMPLE_NAMES[selectedDemo]}.mp3`, { type: "audio/mpeg" });
 
-      if (!response.ok) throw new Error("Analysis failed");
-      const data = await response.json();
-
-      // Auto-set patient from response if we used auto-match
-      if (!selectedPatient && data.patient) {
-        setSelectedPatient(data.patient);
+      // Use the same real transcription pipeline as manual upload
+      const formData = new FormData();
+      formData.append("audio", file);
+      if (selectedPatient && selectedPatient.id > 0) {
+        formData.append("patientId", String(selectedPatient.id));
       }
 
-      setAllTranscriptLines(data.transcript);
-      setAllActions(data.actions);
-      setSummary(data.summary);
-      setDuration(data.duration);
-      setReport({
-        soap_note: data.soap_note,
-        actions: data.actions,
-        record_changes: [],
-        time_saved: data.time_saved,
-        total_actions: data.total_actions,
+      setUploadStatus("Submitting to Speechmatics...");
+
+      const response = await fetch("/api/process-audio", {
+        method: "POST",
+        body: formData,
       });
-      // Trigger autonomous agent actions for instant mode too
-      triggerAgentAutonomousActions(
-        data.actions,
-        data.patient?.name || selectedPatient?.name || "Patient",
-        data.soap_note || { subjective: "", assessment: "" }
-      );
+
+      if (!response.ok && !response.headers.get("content-type")?.includes("text/event-stream")) {
+        const err = await response.json();
+        throw new Error(err.error || "Audio processing failed");
+      }
+
+      // Handle SSE stream (same logic as handleAudioUpload)
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("No response stream");
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const messages = buffer.split("\n\n");
+        buffer = messages.pop() || "";
+
+        for (const msg of messages) {
+          if (!msg.trim()) continue;
+          const eventMatch = msg.match(/^event: (.+)$/m);
+          const dataMatch = msg.match(/^data: (.+)$/m);
+          if (!eventMatch || !dataMatch) continue;
+
+          const event = eventMatch[1];
+          let data;
+          try { data = JSON.parse(dataMatch[1]); } catch { continue; }
+
+          switch (event) {
+            case "phase":
+              setUploadStatus(data.message);
+              if (data.duration) setDuration(data.duration);
+              break;
+            case "progress":
+              setUploadStatus(data.message);
+              break;
+            case "transcript_lines":
+              setTranscriptLines((prev) => [...prev, ...data.lines]);
+              if (data.lines.length > 0) {
+                setCurrentTime(data.lines[data.lines.length - 1].timestamp);
+              }
+              break;
+            case "actions_partial":
+              setActions(data.actions);
+              break;
+            case "actions":
+              setActions(data.actions);
+              break;
+            case "complete":
+              setUploadStatus("Analysis complete!");
+              if (data.patient && !selectedPatient) {
+                setSelectedPatient(data.patient);
+              }
+              setSummary(data.summary);
+              setDuration(data.duration || 60);
+              setActions(data.actions);
+              setReport({
+                soap_note: data.soap_note,
+                actions: data.actions,
+                record_changes: [],
+                time_saved: data.time_saved || "8 minutes",
+                total_actions: data.total_actions || data.actions.length,
+              });
+              setIsProcessing(false);
+              setInstantComplete(true);
+              // Trigger autonomous agent actions
+              triggerAgentAutonomousActions(
+                data.actions,
+                data.patient?.name || selectedPatient?.name || "Patient",
+                data.soap_note || { subjective: "", assessment: "" }
+              );
+              break;
+            case "error":
+              throw new Error(data.error);
+          }
+        }
+      }
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") return;
-      console.error("Instant processing error:", error);
+      console.error("Processing error:", error);
+      setUploadStatus(`Error: ${error instanceof Error ? error.message : "Processing failed"}`);
       setIsProcessing(false);
       addToast({
         type: "error",
-        message: "Analysis failed. Check your connection and try again.",
+        message: error instanceof Error ? error.message : "Analysis failed. Check your connection and try again.",
         action: { label: "Retry", onClick: () => startInstantProcessing() },
       });
     }
@@ -601,10 +626,6 @@ export default function Home() {
                     Live Mic
                   </button>
                 </div>
-                <p className="text-xs text-[var(--text-muted)] text-center mt-2">
-                  {mode === "instant" && "Pre-recorded scenarios — full agent pipeline in seconds"}
-                  {mode === "live" && "Real-time mic — speak and watch the agent respond"}
-                </p>
                 {isActive && (
                   <button
                     onClick={handleCancel}
@@ -618,37 +639,47 @@ export default function Home() {
                 )}
               </div>
 
-              {/* Patient Selection */}
-              <PatientSelector
-                patients={patients}
-                selectedPatient={selectedPatient}
-                onSelect={setSelectedPatient}
-                disabled={isProcessing}
-              />
-
-              {/* Mode-specific input */}
+              {/* Mode-specific controls */}
               {mode === "instant" && (
-                <AudioInput
-                  demos={[]}
-                  selectedDemo={selectedDemo}
-                  onSelectDemo={setSelectedDemo}
-                  onStart={startInstantProcessing}
-                  onFileUpload={handleAudioUpload}
-                  isProcessing={isProcessing}
-                  disabled={false}
-                />
+                <>
+                  <PatientSelector
+                    patients={patients}
+                    selectedPatient={selectedPatient}
+                    onSelect={setSelectedPatient}
+                    disabled={isProcessing}
+                  />
+                  <AudioSourcePicker
+                    selectedId={selectedDemo}
+                    onSelect={(id) => {
+                      setSelectedDemo(id);
+                    }}
+                    onUpload={handleAudioUpload}
+                    onRunDemo={startInstantProcessing}
+                    isProcessing={isProcessing}
+                    uploadedFileName={uploadedFile?.name}
+                    statusMessage={uploadStatus}
+                  />
+                </>
               )}
 
               {mode === "live" && (
-                <LiveMic
-                  patientId={selectedPatient ? selectedPatient.id : null}
-                  onTranscriptLine={handleLiveTranscript}
-                  onAction={handleLiveAction}
-                  onSummary={handleLiveSummary}
-                  onComplete={handleLiveComplete}
-                  isActive={isLiveActive}
-                  onToggle={handleLiveToggle}
-                />
+                <>
+                  <PatientSelector
+                    patients={patients}
+                    selectedPatient={selectedPatient}
+                    onSelect={setSelectedPatient}
+                    disabled={isProcessing}
+                  />
+                  <LiveMic
+                    patientId={selectedPatient ? selectedPatient.id : null}
+                    onTranscriptLine={handleLiveTranscript}
+                    onAction={handleLiveAction}
+                    onSummary={handleLiveSummary}
+                    onComplete={handleLiveComplete}
+                    isActive={isLiveActive}
+                    onToggle={handleLiveToggle}
+                  />
+                </>
               )}
             </div>
 

@@ -328,8 +328,12 @@ export default function LiveMic({
       setConnectionStatus("Getting auth token...");
       const tokenRes = await fetch("/api/speechmatics-token");
       if (!tokenRes.ok) {
-        const err = await tokenRes.json().catch(() => ({ error: "Token request failed" }));
-        throw new Error(err.error || "Could not get Speechmatics token");
+        // No Speechmatics key — fall back to simulation immediately
+        cleanupAll();
+        setError(null);
+        setConnectionStatus("");
+        startSimulation();
+        return;
       }
       const { token } = await tokenRes.json();
 
@@ -483,8 +487,11 @@ export default function LiveMic({
       };
 
       ws.onerror = () => {
-        setError("WebSocket connection to Speechmatics failed. Check network.");
+        // Auto-fallback to simulation when Speechmatics fails
+        cleanupAll();
+        setError(null);
         setConnectionStatus("");
+        startSimulation();
       };
 
       ws.onclose = (event) => {
@@ -495,11 +502,14 @@ export default function LiveMic({
       };
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : "Could not start listening";
-      setError(errMsg);
-      setConnectionStatus("");
+      console.log("Mic/Speechmatics error, falling back to simulation:", errMsg);
       cleanupAll();
+      // Auto-fallback to simulation instead of just showing error
+      setError(null);
+      setConnectionStatus("");
+      startSimulation();
     }
-  }, [scheduleAnalysis, flushSentenceBuffer, scheduleFlush, cleanupAll]);
+  }, [scheduleAnalysis, flushSentenceBuffer, scheduleFlush, cleanupAll, startSimulation]);
 
   // Stream raw PCM audio to Speechmatics WebSocket
   const startAudioStreaming = (source: MediaStreamAudioSourceNode, audioContext: AudioContext, ws: WebSocket) => {

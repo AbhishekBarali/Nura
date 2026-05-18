@@ -184,6 +184,8 @@ function getActionDescription(action: { type: string; content: Record<string, un
     case "symptom": return content.description || "Symptom identified";
     case "condition": return `${content.name} (${content.status})`;
     case "referral": return `→ ${content.department}: ${content.reason}`;
-    default: return JSON.stringify(content);
+    case "summary": return content.description || content.text || "Encounter summary";
+    case "record_update": return `${content.field}: ${content.new_value || content.value || "Updated"}`;
+    default: return content.description || content.name || content.text || "Action recorded";
   }
 }
