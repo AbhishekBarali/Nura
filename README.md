@@ -16,6 +16,9 @@
   - [Features](#features)
   - [Tech Stack](#tech-stack)
   - [Architecture Overview](#architecture-overview)
+    - [System Architecture](#system-architecture)
+    - [Autonomous Agent Pipeline](#autonomous-agent-pipeline)
+    - [Processing Pipeline (per audio segment)](#processing-pipeline-per-audio-segment)
   - [Prerequisites](#prerequisites)
   - [Installation](#installation)
   - [Configuration](#configuration)
@@ -78,46 +81,119 @@
 
 ## Architecture Overview
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        BROWSER (React)                           │
-│                                                                  │
-│  Landing Page (/)  ──→  Demo Page (/demo)                       │
-│                         ├── Patient Selector                     │
-│                         ├── Audio Source Picker (Instant / Live) │
-│                         ├── Live Transcript (color-coded)        │
-│                         ├── Agent Actions Panel (cards)          │
-│                         ├── Agent Decision Log                   │
-│                         └── Complete Report Modal                │
-└────────────────────────────────┬────────────────────────────────┘
-                                 │ SSE / Fetch
-                                 ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                     NEXT.JS API ROUTES                           │
-│                                                                  │
-│  /api/patients           → Patient records (in-memory store)    │
-│  /api/instant-analysis   → Pre-transcribed demo pipeline        │
-│  /api/process-audio      → Audio upload + real-time pipeline    │
-│  /api/analyze-chunk      → LLM analysis of transcript segments  │
-│  /api/speechmatics-token → Auth token for real-time client      │
-└────────────────────────────────┬────────────────────────────────┘
-                                 │
-                    ┌────────────┼────────────┐
-                    ▼            ▼            ▼
-            ┌────────────┐ ┌─────────┐ ┌───────────┐
-            │Speechmatics│ │Featherless│ │  Gemini   │
-            │  (STT)     │ │  (LLM)   │ │ (Fallback)│
-            └────────────┘ └──────────┘ └───────────┘
+### System Architecture
+
+```mermaid
+graph TB
+    subgraph Browser["🖥️ Browser (React + Next.js)"]
+        LP[Landing Page '/']
+        DP[Demo Page '/demo']
+        PS[Patient Selector]
+        ASP[Audio Source Picker]
+        LT[Live Transcript]
+        AA[Agent Actions Panel]
+        AL[Agent Decision Log]
+        CR[Complete Report Modal]
+        
+        LP --> DP
+        DP --> PS
+        DP --> ASP
+        DP --> LT
+        DP --> AA
+        DP --> AL
+        DP --> CR
+    end
+
+    subgraph API["⚡ Next.js API Routes"]
+        PA["/api/patients"]
+        IA["/api/instant-analysis"]
+        PAU["/api/process-audio"]
+        AC["/api/analyze-chunk"]
+        ST["/api/speechmatics-token"]
+    end
+
+    subgraph External["☁️ External Services"]
+        SM["Speechmatics\n(Speech-to-Text)"]
+        FL["Featherless AI\n(Primary LLM)"]
+        GM["Google Gemini\n(Fallback LLM)"]
+    end
+
+    subgraph Data["💾 Data Layer"]
+        DB["In-Memory Patient Store\n(3 Demo Patients)"]
+        DI["Drug Interaction\nReference Data"]
+    end
+
+    Browser -->|"SSE / Fetch"| API
+    PA --> DB
+    IA --> DB
+    IA --> FL
+    PAU --> SM
+    PAU --> FL
+    AC --> FL
+    AC --> GM
+    AC --> DI
+    ST --> SM
 ```
 
-**Processing Pipeline (per audio segment):**
+### Autonomous Agent Pipeline
 
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant F as Frontend
+    participant API as API Route
+    participant SM as Speechmatics
+    participant LLM as LLM (Featherless/Gemini)
+    participant DB as Patient Records
+
+    U->>F: Press "Analyze Instantly"
+    F->>API: POST /api/instant-analysis
+    API->>SM: Stream audio for transcription
+    SM-->>API: Transcript chunks (with speaker labels)
+    
+    loop Every 5-10 seconds
+        API->>DB: Load patient record
+        API->>LLM: Analyze transcript + patient context
+        LLM-->>API: Structured JSON (meds, symptoms, alerts)
+        API->>DB: Update patient record
+        API-->>F: SSE event (transcript line)
+        API-->>F: SSE event (action cards)
+        API-->>F: SSE event (alerts)
+    end
+
+    API->>LLM: Generate SOAP note
+    LLM-->>API: Complete clinical documentation
+    API-->>F: SSE event (complete)
+
+    Note over F: Autonomous Post-Analysis Actions
+    F->>F: 1. Update Patient Record
+    F->>F: 2. Email SOAP Report
+    F->>F: 3. Alert Care Team (if alerts)
+    F->>F: 4. Dispatch Referral (if needed)
+    F->>F: 5. Schedule Follow-up
 ```
-Audio → Speechmatics (transcribe + diarize) → Transcript chunk
-    → LLM Analysis (extract meds, symptoms, conditions)
-    → Cross-reference patient record (interactions, allergies)
-    → Push results to frontend via SSE
-    → Autonomous actions (update record, email, alert, refer, schedule)
+
+### Processing Pipeline (per audio segment)
+
+```mermaid
+flowchart LR
+    A[🎤 Audio Chunk] --> B[Speechmatics\nTranscribe + Diarize]
+    B --> C[Transcript\nwith Speaker Labels]
+    C --> D[LLM Analysis]
+    D --> E{Clinical Findings}
+    E --> F[💊 Medications]
+    E --> G[🤒 Symptoms]
+    E --> H[⚠️ Drug Interactions]
+    E --> I[🚨 Allergy Conflicts]
+    E --> J[📨 Referrals]
+    E --> K[📝 Summary Update]
+    
+    F --> L[Push to Frontend via SSE]
+    G --> L
+    H --> L
+    I --> L
+    J --> L
+    K --> L
 ```
 
 ---
