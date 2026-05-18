@@ -14,7 +14,7 @@ import Onboarding from "@/components/Onboarding";
 import Toast, { useToast } from "@/components/Toast";
 import { Patient, TranscriptLine, ActionCard, CompleteReportData } from "@/lib/types";
 
-type AppMode = "instant" | "live" | "upload";
+type AppMode = "instant" | "live";
 
 export default function Home() {
   const [mode, setMode] = useState<AppMode>("instant");
@@ -32,6 +32,7 @@ export default function Home() {
   const [isLiveActive, setIsLiveActive] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadStatus, setUploadStatus] = useState<string>("");
+  const [autoPlayed, setAutoPlayed] = useState(false);
 
   // For instant mode staggered animation
   const [allTranscriptLines, setAllTranscriptLines] = useState<TranscriptLine[]>([]);
@@ -42,7 +43,26 @@ export default function Home() {
   const [agentLog, setAgentLog] = useState<AgentLogEntry[]>([]);
   const [agentActive, setAgentActive] = useState(false);
   const [liveRecordUpdates, setLiveRecordUpdates] = useState<string[]>([]);
-  const [bookedAppointments, setBookedAppointments] = useState<BookedAppointment[]>([]);
+  const [bookedAppointments, setBookedAppointments] = useState<BookedAppointment[]>(() => {
+    // Pre-populate with existing clinic appointments to show intelligent scheduling
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    const dayAfter = new Date(today);
+    dayAfter.setDate(today.getDate() + 2);
+    const nextWeek = new Date(today);
+    nextWeek.setDate(today.getDate() + 5);
+    const nextWeek2 = new Date(today);
+    nextWeek2.setDate(today.getDate() + 7);
+    return [
+      { date: tomorrow, time: "9:00 AM", department: "Cardiology", patient: "Mrs. Chen" },
+      { date: tomorrow, time: "2:30 PM", department: "Primary Care", patient: "Mr. Rodriguez" },
+      { date: dayAfter, time: "10:00 AM", department: "Neurology", patient: "Ms. Patel" },
+      { date: nextWeek, time: "11:00 AM", department: "Endocrinology", patient: "Mr. Thompson" },
+      { date: nextWeek2, time: "3:00 PM", department: "Orthopedics", patient: "Mrs. Williams" },
+    ];
+  });
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   const { toasts, addToast, dismissToast } = useToast();
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -55,9 +75,22 @@ export default function Home() {
       .catch(console.error);
   }, []);
 
-  // Staggered animation for instant/upload mode
+  // Auto-play demo after onboarding
   useEffect(() => {
-    if (!isProcessing || (mode !== "instant" && mode !== "upload")) return;
+    if (onboardingComplete && !autoPlayed && !isProcessing && mode === "instant" && selectedDemo) {
+      setAutoPlayed(true);
+      // Short delay so user sees the UI before auto-play kicks in
+      const timer = setTimeout(() => {
+        startInstantProcessing();
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onboardingComplete]);
+
+  // Staggered animation for instant mode
+  useEffect(() => {
+    if (!isProcessing || mode !== "instant") return;
     if (allTranscriptLines.length === 0 && allActions.length === 0) return;
 
     let transcriptIdx = 0;
@@ -343,10 +376,9 @@ export default function Home() {
     }
   }, [selectedPatient, selectedDemo, triggerAgentAutonomousActions, addToast]);
 
-  // === UPLOAD MODE ===
+  // === UPLOAD MODE (via AudioInput upload button) ===
   const handleAudioUpload = useCallback(async (file: File) => {
     setUploadedFile(file);
-    setMode("upload");
     setIsProcessing(true);
     setTranscriptLines([]);
     setActions([]);
@@ -520,7 +552,7 @@ export default function Home() {
     setAgentLog([]);
     setAgentActive(false);
     setLiveRecordUpdates([]);
-    setBookedAppointments([]);
+    // Don't reset bookedAppointments — keep pre-populated + newly booked ones
   };
 
   const isActive = isProcessing || isLiveActive;
@@ -533,12 +565,12 @@ export default function Home() {
 
       <main className="flex-1 w-full">
         <h1 className="sr-only">Nura Clinical Demo</h1>
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-6">
+        <div className="max-w-[1600px] mx-auto px-5 sm:px-8 py-6">
           {/* Split Panel Layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 min-h-[calc(100vh-140px)]">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[calc(100vh-140px)]">
             
             {/* LEFT PANEL — Controls */}
-            <div className="lg:col-span-4 space-y-4">
+            <div className="lg:col-span-4 space-y-5">
               {/* Mode Switcher */}
               <div className="elevated-card rounded-xl p-4">
                 <div className="flex items-center gap-1 p-1 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-lg">
@@ -556,19 +588,6 @@ export default function Home() {
                     Instant Demo
                   </button>
                   <button
-                    onClick={() => switchMode("upload")}
-                    className={`flex-1 px-3 py-2.5 rounded-md text-xs font-semibold transition-all duration-200 flex items-center justify-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500/40 ${
-                      mode === "upload"
-                        ? "bg-white text-blue-700 shadow-sm border border-blue-200"
-                        : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-                    }`}
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                    </svg>
-                    Upload
-                  </button>
-                  <button
                     onClick={() => switchMode("live")}
                     className={`flex-1 px-3 py-2.5 rounded-md text-xs font-semibold transition-all duration-200 flex items-center justify-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500/40 ${
                       mode === "live"
@@ -584,7 +603,6 @@ export default function Home() {
                 </div>
                 <p className="text-xs text-[var(--text-muted)] text-center mt-2">
                   {mode === "instant" && "Pre-recorded scenarios — full agent pipeline in seconds"}
-                  {mode === "upload" && "Upload any audio file — AI identifies speakers & analyzes"}
                   {mode === "live" && "Real-time mic — speak and watch the agent respond"}
                 </p>
                 {isActive && (
@@ -621,71 +639,6 @@ export default function Home() {
                 />
               )}
 
-              {mode === "upload" && (
-                <div className="elevated-card rounded-xl p-5">
-                  <div className="flex items-center gap-2.5 mb-4">
-                    <svg className="w-4 h-4 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                    </svg>
-                    <label className="text-sm font-semibold text-[var(--text-primary)]">
-                      Upload Audio
-                    </label>
-                  </div>
-
-                  {uploadedFile ? (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-blue-50 border border-blue-200">
-                        <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
-                          <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
-                          </svg>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-blue-900 truncate">{uploadedFile.name}</p>
-                          <p className="text-xs text-blue-600">
-                            {(uploadedFile.size / 1024 / 1024).toFixed(1)} MB
-                          </p>
-                        </div>
-                      </div>
-                      {uploadStatus && (
-                        <div className={`text-xs font-medium px-3 py-2 rounded-lg ${
-                          uploadStatus.startsWith("Error") 
-                            ? "text-red-700 bg-red-50 border border-red-200" 
-                            : "text-blue-700 bg-blue-50 border border-blue-200"
-                        }`}>
-                          {isProcessing && <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-600 animate-breathe mr-2" />}
-                          {uploadStatus}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <label className="flex flex-col items-center justify-center h-40 border-2 border-dashed border-[var(--border-medium)] rounded-lg cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-all">
-                      <svg className="w-8 h-8 text-slate-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
-                      </svg>
-                      <p className="text-sm text-[var(--text-muted)]">Drop audio file or click to browse</p>
-                      <p className="text-xs text-slate-400 mt-1">WAV, MP3, M4A, OGG, WebM</p>
-                      <input
-                        type="file"
-                        accept="audio/*,.wav,.mp3,.m4a,.ogg,.webm"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) handleAudioUpload(file);
-                        }}
-                      />
-                    </label>
-                  )}
-
-                  <div className="mt-4 p-3 rounded-lg bg-slate-50 border border-[var(--border-subtle)]">
-                    <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-                      <span className="text-blue-700 font-semibold">AI-powered:</span> Automatically identifies Doctor vs Patient speakers, 
-                      detects clinical scenarios, drug interactions, and generates SOAP notes — no manual setup needed.
-                    </p>
-                  </div>
-                </div>
-              )}
-
               {mode === "live" && (
                 <LiveMic
                   patientId={selectedPatient ? selectedPatient.id : null}
@@ -697,96 +650,86 @@ export default function Home() {
                   onToggle={handleLiveToggle}
                 />
               )}
-
-              {/* Report Button */}
-              {report && !isProcessing && (mode === "instant" || mode === "upload" ? instantComplete : !isLiveActive) && (
-                <button
-                  onClick={() => setShowReport(true)}
-                  className="w-full group px-5 py-4 bg-blue-50 hover:bg-blue-100 border border-blue-200 hover:border-blue-300 text-blue-900 font-semibold rounded-xl transition-all duration-200 animate-fade-in flex items-center gap-3"
-                >
-                  <span className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center group-hover:bg-blue-200 transition-colors">
-                    <svg className="w-4 h-4 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
-                    </svg>
-                  </span>
-                  <span className="text-left flex-1">
-                    <span className="block text-sm font-semibold">View Complete Report</span>
-                    <span className="block text-xs text-blue-600 font-normal">SOAP note, actions, time saved</span>
-                  </span>
-                </button>
-              )}
-
-              {/* Live Record Updates */}
-              {liveRecordUpdates.length > 0 && (
-                <div className="elevated-card rounded-xl overflow-hidden animate-fade-in">
-                  <div className="px-4 py-2.5 border-b border-[var(--border-subtle)] flex items-center gap-2 bg-emerald-50">
-                    <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                    </svg>
-                    <h3 className="text-sm font-semibold text-emerald-800">Record Updated</h3>
-                  </div>
-                  <div className="px-4 py-2 space-y-1">
-                    {liveRecordUpdates.map((update, i) => (
-                      <div key={i} className="flex items-center gap-2 py-1 animate-fade-in">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
-                        <span className="text-xs text-emerald-700 font-medium">{update}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Agent Decision Log */}
-              <AgentLog entries={agentLog} isActive={agentActive} />
             </div>
 
             {/* RIGHT PANEL — Live Results */}
-            <div className="lg:col-span-8 space-y-4">
+            <div className="lg:col-span-8 flex flex-col gap-5 h-[calc(100vh-160px)]">
+              {/* Agent Log — Hero Section */}
+              <AgentLog
+                entries={agentLog}
+                isActive={agentActive}
+                isHero={true}
+                recordUpdates={liveRecordUpdates}
+                reportReady={!!report && !isProcessing && (mode === "instant" ? instantComplete : !isLiveActive)}
+                onViewReport={() => setShowReport(true)}
+              />
+
+              {/* Results Area */}
               {!hasResults && !isActive ? (
-                <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 h-[calc(100vh-160px)]">
-                  <div className="xl:col-span-8 elevated-card rounded-xl h-full flex flex-col items-center justify-center p-12 text-center min-h-[500px]">
-                    <div className="w-16 h-16 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center mb-5">
-                      <svg className="w-8 h-8 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
+                <div className="flex-1 grid grid-cols-1 xl:grid-cols-12 gap-5 min-h-0">
+                  {/* Preview / Example */}
+                  <div className="xl:col-span-8 elevated-card rounded-xl flex flex-col p-7 min-h-0 overflow-hidden">
+                    <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
+                      <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       </svg>
-                    </div>
-                    <h3 className="text-lg font-display font-semibold text-[var(--text-primary)] mb-2">Ready to Analyze</h3>
-                    <p className="text-sm text-[var(--text-muted)] max-w-md leading-relaxed">
-                      {mode === "instant" && "Select a clinical scenario on the left and click Analyze to see the agent pipeline in action."}
-                      {mode === "upload" && "Upload an audio recording of a clinical encounter. The AI will transcribe, identify speakers, and analyze automatically."}
-                      {mode === "live" && "Click the microphone to start recording. Speak or play audio near your mic — the agent analyzes in real-time."}
-                    </p>
-                    <div className="flex items-center gap-4 mt-6 text-xs text-[var(--text-muted)]">
-                      <span className="flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-blue-400" />
-                        Speaker ID
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-red-400" />
-                        Drug Alerts
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                        SOAP Notes
-                      </span>
+                      What You'll See
+                    </h3>
+                    <div className="flex-1 grid grid-cols-2 gap-3 min-h-0">
+                      {/* Preview: Transcript */}
+                      <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/50 p-4 flex flex-col">
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className="w-5 h-5 rounded bg-blue-100 flex items-center justify-center text-[9px] font-bold text-blue-600">D</span>
+                          <span className="text-xs font-semibold text-slate-500">Live Transcript</span>
+                        </div>
+                        <div className="space-y-2 opacity-50">
+                          <div className="h-2.5 bg-blue-100 rounded w-3/4" />
+                          <div className="h-2.5 bg-amber-100 rounded w-5/6" />
+                          <div className="h-2.5 bg-blue-100 rounded w-2/3" />
+                          <div className="h-2.5 bg-amber-100 rounded w-4/5" />
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-auto pt-3">Doctor & Patient labeled automatically</p>
+                      </div>
+                      {/* Preview: Findings */}
+                      <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/50 p-4 flex flex-col">
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className="w-5 h-5 rounded bg-red-100 flex items-center justify-center text-[9px]">⚠️</span>
+                          <span className="text-xs font-semibold text-slate-500">Clinical Findings</span>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="rounded border border-red-200 bg-red-50/50 p-2 opacity-60">
+                            <p className="text-[10px] font-bold text-red-600 uppercase">Alert</p>
+                            <p className="text-[10px] text-red-700 mt-0.5">Drug interaction detected</p>
+                          </div>
+                          <div className="rounded border border-blue-200 bg-blue-50/50 p-2 opacity-60">
+                            <p className="text-[10px] font-bold text-blue-600 uppercase">Medication</p>
+                            <p className="text-[10px] text-blue-700 mt-0.5">Lisinopril 10mg prescribed</p>
+                          </div>
+                          <div className="rounded border border-emerald-200 bg-emerald-50/50 p-2 opacity-60">
+                            <p className="text-[10px] font-bold text-emerald-600 uppercase">Referral</p>
+                            <p className="text-[10px] text-emerald-700 mt-0.5">Cardiology — follow-up</p>
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-auto pt-3">AI detects & acts in real-time</p>
+                      </div>
                     </div>
                   </div>
-                  <div className="xl:col-span-4">
+                  {/* Calendar */}
+                  <div className="xl:col-span-4 min-h-0">
                     <AppointmentCalendar appointments={bookedAppointments} />
                   </div>
                 </div>
               ) : (
-                <div className="space-y-4 h-[calc(100vh-160px)]">
-                  <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 h-full">
-                    <div className="xl:col-span-4 min-h-0">
-                      <LiveTranscript lines={transcriptLines} isProcessing={isActive} />
-                    </div>
-                    <div className="xl:col-span-5 min-h-0">
+                <div className="flex-1 grid grid-cols-1 xl:grid-cols-12 gap-5 min-h-0">
+                  <div className="xl:col-span-5 min-h-0">
+                    <LiveTranscript lines={transcriptLines} isProcessing={isActive} />
+                  </div>
+                  <div className="xl:col-span-7 flex flex-col gap-5 min-h-0">
+                    <div className="flex-1 min-h-0">
                       <AgentActions actions={actions} summary={summary} isProcessing={isActive} />
                     </div>
-                    <div className="xl:col-span-3 min-h-0">
-                      <AppointmentCalendar appointments={bookedAppointments} />
-                    </div>
+                    <AppointmentCalendar appointments={bookedAppointments} compact={true} />
                   </div>
                 </div>
               )}

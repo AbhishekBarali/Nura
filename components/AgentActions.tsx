@@ -53,7 +53,7 @@ export default function AgentActions({ actions = [], summary, isProcessing }: Ag
       {/* Actions body */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto px-3 py-3 space-y-2 scrollbar-thin"
+        className="flex-1 overflow-y-auto px-3 py-3 space-y-1.5 scrollbar-thin"
         role="log"
         aria-live="polite"
         aria-relevant="additions"

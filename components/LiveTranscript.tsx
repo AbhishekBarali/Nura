@@ -41,7 +41,7 @@ export default function LiveTranscript({ lines, isProcessing }: LiveTranscriptPr
       {/* Transcript body */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto px-4 py-3 space-y-1 scrollbar-thin"
+        className="flex-1 overflow-y-auto px-4 py-3 space-y-0.5 scrollbar-thin"
         role="log"
         aria-live="polite"
         aria-relevant="additions"
